@@ -1,8 +1,12 @@
 import os
-os.system('clear')
+ 
+os.system("clear")
 
-age = 25
-citizen = True
+Hello = "Hi, how are you?"
 
-if (age >= 18 and citizen == True):
-    print("Can vote!")
+def sayHello():
+    Hello = Hello + " It's good to see you!"
+    print(Hello)    
+
+sayHello()
+print(Hello)
