@@ -54,6 +54,8 @@ fruit.color('red')
 fruit.penup()
 fruit.goto(30,30)
 
+fruitColors = ["red","yellow"]
+
 old_fruit=[]
 
 #scoring
@@ -115,6 +117,7 @@ while True:
         if snake.distance(fruit)< 20:
                 x = random.randint(-290,270)
                 y = random.randint(-240,240)
+                fruit.color()
                 fruit.goto(x,y)
                 scoring.clear()
                 score+=1
