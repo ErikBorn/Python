@@ -1,3 +1,2 @@
-
-test = input("enter stuff ")
-print(test)
+a = 15
+b = 15
