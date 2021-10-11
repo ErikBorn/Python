@@ -9,7 +9,7 @@ screen = turtle.Screen()
 screen.title('DATAFLAIR-SNAKE GAME')
 screen.setup(width = 700, height = 700)
 screen.tracer(0)
-turtle.bgcolor('turquoise')
+turtle.bgcolor('white')
 
 
 
@@ -20,7 +20,7 @@ turtle.pensize(4)
 turtle.penup()
 turtle.goto(-310,250)
 turtle.pendown()
-turtle.color('black')
+turtle.color('blue')
 turtle.forward(600)
 turtle.right(90)
 turtle.forward(500)
@@ -33,14 +33,14 @@ turtle.hideturtle()
 
 #score
 score = 0
-delay = 0.05
+delay = 0.1
 
 
 #snake
 snake = turtle.Turtle()
 snake.speed(0)
-snake.shape('square')
-snake.color("black")
+snake.shape('triangle')
+snake.color("yellow")
 snake.penup()
 snake.goto(0,0)
 snake.direction = 'stop'
@@ -57,6 +57,8 @@ fruit.goto(30,30)
 fruitColors = ["red","yellow"]
 
 old_fruit=[]
+
+speed = 20
 
 #scoring
 scoring = turtle.Turtle()
@@ -88,26 +90,26 @@ def snake_go_right():
 def snake_move():
     if snake.direction == "up":
         y = snake.ycor()
-        snake.sety(y + 20)
+        snake.sety(y + speed)
 
     if snake.direction == "down":
         y = snake.ycor()
-        snake.sety(y - 20)
+        snake.sety(y - speed)
 
     if snake.direction == "left":
         x = snake.xcor()
-        snake.setx(x - 20)
+        snake.setx(x - speed)
 
     if snake.direction == "right":
         x = snake.xcor()
-        snake.setx(x + 20)
+        snake.setx(x + speed)
 
 # Keyboard bindings
 screen.listen()
-screen.onkeypress(snake_go_up, "Up")
-screen.onkeypress(snake_go_down, "Down")
-screen.onkeypress(snake_go_left, "Left")
-screen.onkeypress(snake_go_right, "Right")
+screen.onkeypress(snake_go_up, "w")
+screen.onkeypress(snake_go_down, "s")
+screen.onkeypress(snake_go_left, "a")
+screen.onkeypress(snake_go_right, "d")
 
 #main loop
 
