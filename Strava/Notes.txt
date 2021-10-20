@@ -1,0 +1,18 @@
+David: "If you want to use an object relational mapper in Python, 
+it’s pretty good stuff to learn. I’d look into sqlalchemy
+
+Not particularly difficult if your just using SQLite 
+That doesn’t require a server at all
+
+Postgres and psycopg2 if you want to interact directly with it without an ORM
+I use pgAdmin for the UI if I need it"
+
+Goals:
+-- Continue working on .groupby
+-- Collect all activity data with APIs
+-- Build activity data into a database...?
+-- Pull MFP data into database
+-- Generate some new interesting stuff using this data, ideas:
+    - Try to figure out Power vs. HR vs. Elevation vs. Time (?)
+
+-- NLP on gmail outbox for life event tagging
