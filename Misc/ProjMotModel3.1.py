@@ -44,7 +44,7 @@ camAngle1, camAngle2 = 45, 90
 #Allows for two parameter scanning. Must use correct reference.
 #Script will plot all combinations (so 2 and 3 means 6 trajectories)
 scans = {'wind':[0,1],
-         'omgy':[0,-5.,5.]}
+         'omgy':[0,-1.,1.]}
 scanList = []
 for var in scans:scanList.append(var)
 
