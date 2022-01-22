@@ -1,9 +1,11 @@
 {
 	"folders": [
 		{
+			"name": "Python",
 			"path": "."
 		},
 		{
+			"name": "Julias's Code",
 			"path": "../../Dropbox/Mac/Documents/Julias's Code"
 		}
 	],
