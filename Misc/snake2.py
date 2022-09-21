@@ -16,6 +16,7 @@ turtle.bgcolor('turquoise')
 ##creating a border for our game
 
 turtle.speed(5)
+turtle.end_fill()
 turtle.pensize(4)
 turtle.penup()
 turtle.goto(-310,250)
