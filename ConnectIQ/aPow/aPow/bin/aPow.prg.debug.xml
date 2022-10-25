@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<debugInfo>
+    <manifest filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/manifest.xml"/>
+    <pcToLineNum>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowApp.mc" id="1" lineNum="7" parent="globals/aPowApp" pc="268435456" symbol="initialize"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowApp.mc" id="1" lineNum="8" parent="globals/aPowApp" pc="268435460" symbol="initialize"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowApp.mc" id="2" lineNum="12" parent="globals/aPowApp" pc="268435479" symbol="onStart"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowApp.mc" id="3" lineNum="16" parent="globals/aPowApp" pc="268435484" symbol="onStop"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowApp.mc" id="4" lineNum="20" parent="globals/aPowApp" pc="268435489" symbol="getInitialView"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowApp.mc" id="4" lineNum="21" parent="globals/aPowApp" pc="268435493" symbol="getInitialView"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowApp.mc" id="5" lineNum="5" parent="globals/aPowApp" pc="268435734" symbol="&lt;init&gt;"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowApp.mc" id="5" lineNum="5" parent="globals/aPowApp" pc="268435734" symbol="&lt;init&gt;"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowApp.mc" id="6" lineNum="26" parent="globals" pc="268435531" symbol="getApp"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowApp.mc" id="6" lineNum="27" parent="globals" pc="268435543" symbol="getApp"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="8" lineNum="9" parent="globals/aPowView" pc="268435560" symbol="initialize"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="8" lineNum="10" parent="globals/aPowView" pc="268435564" symbol="initialize"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="8" lineNum="11" parent="globals/aPowView" pc="268435582" symbol="initialize"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="9" lineNum="19" parent="globals/aPowView" pc="268435596" symbol="compute"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="9" lineNum="20" parent="globals/aPowView" pc="268435600" symbol="compute"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="9" lineNum="21" parent="globals/aPowView" pc="268435610" symbol="compute"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="9" lineNum="21" parent="globals/aPowView" pc="268435617" symbol="compute"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="9" lineNum="22" parent="globals/aPowView" pc="268435627" symbol="compute"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="9" lineNum="23" parent="globals/aPowView" pc="268435643" symbol="compute"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="9" lineNum="24" parent="globals/aPowView" pc="268435680" symbol="compute"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="10" lineNum="6" parent="globals/aPowView" pc="268435685" symbol="&lt;init&gt;"/>
+        <entry filename="/Users/erikborn/Dropbox/Mac/Documents/Python/ConnectIQ/aPow/aPow/source/aPowView.mc" id="10" lineNum="6" parent="globals/aPowView" pc="268435685" symbol="&lt;init&gt;"/>
+        <entry filename="Rez" id="12" lineNum="2" parent="globals/Rez/Drawables" pc="268435728" symbol="&lt;init&gt;"/>
+        <entry filename="Rez" id="13" lineNum="6" parent="globals/Rez/Fonts" pc="268435730" symbol="&lt;init&gt;"/>
+        <entry filename="Rez" id="14" lineNum="8" parent="globals/Rez/JsonData" pc="268435732" symbol="&lt;init&gt;"/>
+        <entry filename="Rez" id="15" lineNum="10" parent="globals/Rez/Layouts" pc="268435731" symbol="&lt;init&gt;"/>
+        <entry filename="Rez" id="16" lineNum="12" parent="globals/Rez/Menus" pc="268435729" symbol="&lt;init&gt;"/>
+        <entry filename="Rez" id="17" lineNum="14" parent="globals/Rez/Strings" pc="268435733" symbol="&lt;init&gt;"/>
+        <entry filename="Rez" id="18" lineNum="1" parent="globals/Rez" pc="268435704" symbol="&lt;init&gt;"/>
+        <entry filename="Rez" id="18" lineNum="1" parent="globals/Rez" pc="268435704" symbol="&lt;init&gt;"/>
+    </pcToLineNum>
+    <symbolTable>
+        <entry id="8388632" method="true" symbol="&lt;init&gt;"/>
+        <entry id="4" module="true" symbol="globals/Rez/Menus"/>
+        <entry id="10" object="true" symbol="aPowView"/>
+        <entry field="true" id="8388611" module="true" symbol="Toybox"/>
+        <entry field="true" id="14" symbol="AppName"/>
+        <entry id="8" module="true" symbol="globals/Rez/Strings"/>
+        <entry id="8388772" module="true" object="true" symbol="Fonts"/>
+        <entry id="8388631" module="true" symbol="Activity"/>
+        <entry id="8388648" module="true" symbol="WatchUi"/>
+        <entry id="2" module="true" symbol="globals/Rez"/>
+        <entry id="8388771" module="true" object="true" symbol="Drawables"/>
+        <entry id="12" module="true" symbol="Menus"/>
+        <entry id="8389275" method="true" symbol="getApp"/>
+        <entry id="6" module="true" symbol="globals/Rez/Layouts"/>
+        <entry id="8389137" method="true" symbol="compute"/>
+        <entry id="7" module="true" symbol="globals/Rez/JsonData"/>
+        <entry id="3" module="true" symbol="globals/Rez/Drawables"/>
+        <entry id="8388645" module="true" symbol="Time"/>
+        <entry id="8388769" module="true" object="true" symbol="Rez"/>
+        <entry id="8388640" module="true" symbol="Lang"/>
+        <entry id="8390088" module="true" object="true" symbol="JsonData"/>
+        <entry field="true" id="13" symbol="LauncherIcon"/>
+        <entry id="8388610" symbol="statics"/>
+        <entry id="9" object="true" symbol="aPowApp"/>
+        <entry id="8389350" module="true" symbol="globals"/>
+        <entry id="8388770" module="true" object="true" symbol="Strings"/>
+        <entry id="8388702" method="true" symbol="initialize"/>
+        <entry id="8389279" method="true" symbol="onStart"/>
+        <entry id="8389280" method="true" symbol="getInitialView"/>
+        <entry id="8389281" method="true" symbol="onStop"/>
+        <entry id="11" module="true" symbol="Layouts"/>
+        <entry id="5" module="true" symbol="globals/Rez/Fonts"/>
+        <entry id="8388635" module="true" symbol="Application"/>
+    </symbolTable>
+    <localVars>
+        <entry arg="true" endPc="268435483" name="state" stackId="1" startPc="268435479"/>
+        <entry arg="true" endPc="268435488" name="state" stackId="1" startPc="268435484"/>
+        <entry endPc="268435682" name="a" stackId="3" startPc="268435600"/>
+        <entry endPc="268435682" name="aP" stackId="4" startPc="268435600"/>
+        <entry endPc="268435682" name="p" stackId="2" startPc="268435600"/>
+        <entry arg="true" endPc="268435683" name="info" stackId="1" startPc="268435596"/>
+    </localVars>
+    <annotations>
+        <annotationEntry annotation="initialized" class="Drawables" module="globals/Rez" symbol="LauncherIcon"/>
+        <annotationEntry annotation="initialized" class="Strings" module="globals/Rez" symbol="AppName"/>
+    </annotations>
+    <dataEntryOffsetMappings>
+        <dataEntry label="globals" offset="87" parentId="" symbolId="globals" type="module"/>
+        <dataEntry label="globals/aPowView" offset="158" parentId="globals" symbolId="aPowView" type="class"/>
+        <dataEntry label="globals/Rez" offset="213" parentId="globals" symbolId="Rez" type="module"/>
+        <dataEntry label="globals/Rez/Drawables" offset="292" parentId="Rez" symbolId="Drawables" type="module"/>
+        <dataEntry label="globals/Rez/Menus" offset="331" parentId="Rez" symbolId="Menus" type="module"/>
+        <dataEntry label="globals/Rez/Fonts" offset="362" parentId="Rez" symbolId="Fonts" type="module"/>
+        <dataEntry label="globals/Rez/Layouts" offset="393" parentId="Rez" symbolId="Layouts" type="module"/>
+        <dataEntry label="globals/Rez/JsonData" offset="424" parentId="Rez" symbolId="JsonData" type="module"/>
+        <dataEntry label="globals/Rez/Strings" offset="455" parentId="Rez" symbolId="Strings" type="module"/>
+        <dataEntry label="globals/aPowApp" offset="494" parentId="globals" symbolId="aPowApp" type="class"/>
+    </dataEntryOffsetMappings>
+    <functions>
+        <functionEntry accessMode="public" endPc="268435478" name="initialize" parent="aPowApp" startPc="268435456">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="public" endPc="268435483" name="onStart" parent="aPowApp" startPc="268435479">
+            <param id="state"/>
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="public" endPc="268435488" name="onStop" parent="aPowApp" startPc="268435484">
+            <param id="state"/>
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="public" endPc="268435530" name="getInitialView" parent="aPowApp" startPc="268435489">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="protected" endPc="268435752" name="&lt;init&gt;" parent="aPowApp" startPc="268435734">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="public" endPc="268435559" name="getApp" startPc="268435531">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="public" endPc="268435595" name="initialize" parent="aPowView" startPc="268435560">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="public" endPc="268435683" name="compute" parent="aPowView" startPc="268435596">
+            <param id="info"/>
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="protected" endPc="268435703" name="&lt;init&gt;" parent="aPowView" startPc="268435685">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="protected" endPc="268435728" name="&lt;init&gt;" parent="Drawables" startPc="268435728">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="protected" endPc="268435730" name="&lt;init&gt;" parent="Fonts" startPc="268435730">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="protected" endPc="268435732" name="&lt;init&gt;" parent="JsonData" startPc="268435732">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="protected" endPc="268435731" name="&lt;init&gt;" parent="Layouts" startPc="268435731">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="protected" endPc="268435729" name="&lt;init&gt;" parent="Menus" startPc="268435729">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="protected" endPc="268435733" name="&lt;init&gt;" parent="Strings" startPc="268435733">
+            <documentation/>
+        </functionEntry>
+        <functionEntry accessMode="protected" endPc="268435727" name="&lt;init&gt;" parent="Rez" startPc="268435704">
+            <documentation/>
+        </functionEntry>
+    </functions>
+</debugInfo>

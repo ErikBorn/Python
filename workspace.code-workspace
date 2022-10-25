@@ -2,6 +2,14 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"name": "altPower",
+			"path": "ConnectIQ/altPower"
+		},
+		{
+			"name": "aPow",
+			"path": "ConnectIQ/aPow/aPow"
 		}
 	],
 	"settings": {
