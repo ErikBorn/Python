@@ -1,17 +1,7 @@
 from PyPDF2 import PdfReader, PdfWriter
 
-# reader = PdfReader("out1.pdf")
-# writer = PdfWriter()
-
-# for page in reader.pages:
-#     page.compress_content_streams()  # This is CPU intensive!
-#     writer.add_page(page)
-
-# with open("out1b.pdf", "wb") as f:
-#     writer.write(f)
-
 filename = "hstrans.pdf"
-sig = "S2 AY22-23"
+sig = " '23 Final"
 pageCount = 1
 inputpdf = open(filename, "rb")
 pagesCount = PdfReader(open(filename, "rb"))
