@@ -11,7 +11,6 @@ L = ["Bante, Madeline", "Bates, Vivian Louise", "Bhale, Saanvi Bhushan", "Blanch
 counter = 0
 for i in range(0,len(pagesCount.pages),pageCount,):
     output = PdfWriter()
-    # output.append(inputpdf.pages[i])
     output.append(fileobj=inputpdf, pages=(i, i+pageCount))
     with open(L[counter]+" "+ sig +".pdf", "wb") as outputStream:
         output.write(outputStream)
