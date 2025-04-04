@@ -1,7 +1,7 @@
 from PyPDF2 import PdfReader, PdfWriter
 
 filename = "hstranscripts.pdf"
-sig = "Final '25"
+sig = "Q2 Transcript"
 pageCount = 1
 inputpdf = open(filename, "rb")
 pagesCount = PdfReader(open(filename, "rb"))

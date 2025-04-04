@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Due Time Manager</title>
+</head>
+<body>
+    <h1>Canvas Assignment Due Time Manager</h1>
+    <form method="POST" action="/submit">
+        <label for="course_id">Course ID:</label>
+        <input type="text" id="course_id" name="course_id" required><br><br>
+
+        {% for i in range(1, 7) %}
+        <label for="section_name_{{ i }}">Section {{ i }} Name:</label>
+        <input type="text" id="section_name_{{ i }}" name="section_name_{{ i }}"><br>
+        <label for="due_time_{{ i }}">Due Time (HH:MM:SS):</label>
+        <input type="text" id="due_time_{{ i }}" name="due_time_{{ i }}"><br><br>
+        {% endfor %}
+
+        <button type="submit">Submit</button>
+    </form>
+</body>
+</html>
