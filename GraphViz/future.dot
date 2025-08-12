@@ -1,0 +1,41 @@
+digraph future_custom {
+    fontsize=10
+    rankdir=LR
+
+    /* === Swim-lane clusters === */
+    subgraph cluster_sys {
+        style=filled  color=black  fillcolor=white  label="Student Billing Software End"  fontsize=12
+        SSS  [shape=record style=filled fillcolor=white
+              label="{SSS|FA Team|FA Calc & Awards\l}"]
+
+        SA   [shape=record style=filled fillcolor=pink
+              label="{SchoolAdmin|Admissions|Contracts Only\l}"]
+
+        TP   [shape=record style=filled fillcolor=lightblue
+              label="{New Tuition\lPlatform|Business\lOffice|Billing\lPayment Plans\lCollections\lSmall Fees\l}"]
+
+        Sage [shape=record style=filled fillcolor=lightblue
+              label="{Sage Intacct|Business\lOffice|AR Ledger\lAudit Trail\l}"]
+        Teach [label="Teachers/Coaches"]
+      
+    }
+
+
+    /* === Flows (colored by responsibility) === */
+    SSS -> TP [label="API FA awards (?)"       color=green]                    // IT
+    SA  -> TP [label="Contracts & Deposits (??)" dir=both color=green]          // IT
+    TP  -> Sage [label="Real-time GL"       dir=both color=green]          // IT
+    TP  -> Teach  [label="Fees and status (?)" dir=both    color=green]                         // Admissions
+
+    /* === Responsibility legend === */
+    subgraph cluster_legend {
+        label="Responsibility Legend" fontsize=10
+        l1 [label="Business Office"   style=filled fillcolor=lightblue]
+        l2 [label="Admissions"        style=filled fillcolor=pink]
+        l3 [label="IT"                style=filled fillcolor=lightgreen]
+        rank=same
+    }
+
+    
+    
+}

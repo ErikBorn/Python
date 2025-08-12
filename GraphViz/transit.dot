@@ -1,0 +1,40 @@
+digraph transitory_state_v1 {
+    fontsize=10
+    rankdir=LR
+
+    /* === Swim-lane clusters === */
+    subgraph cluster_sys {
+        style=filled  color=black  fillcolor=white  label="Student Billing Software Transition 1"  fontsize=12
+
+        SSS  [shape=record
+              label="{SSS|FA Team|FA Calc & Awards\l}"]
+
+        SA   [shape=record  style=filled  fillcolor=pink
+              label="{SchoolAdmin\lFS Enrollment|Admissions|Contracts\lTuition}"]
+        
+        Third   [shape=record  style=filled  fillcolor=lightblue
+              label="{New 3rd Party\lSaaS|Business\lOffice|Fees}"]
+
+        Other [shape = record label="Other Fees"]
+
+        Sage [shape=record  style=filled  fillcolor=lightblue
+              label="{Sage Intacct|Business\lOffice|Accounting / GL\lBank Deposits\l}"]
+
+        Teach [label="Teachers/Coaches"]
+    }
+
+    subgraph cluster_people {
+        style=filled  color=black  fillcolor=white  label="Responsibility Legend"  fontsize=12
+        BO  [shape=ellipse  style=filled  fillcolor= lightblue  label="Business Office"]
+        ADM [shape=ellipse  style=filled  fillcolor=pink        label="Admissions"]
+        IT  [shape=ellipse  style=filled  fillcolor=lightgreen  label="IT"]
+    }
+
+    /* === Flows (dashed = manual) === */
+    SSS   -> SA    [label="Manual\nFA adj. (?)"  style=dashed  color=red]  // BO
+    Other    -> Third    [label="Enter fees (?)"           style=dashed  color=green]  // BO
+    Other    -> Third    [label="Enter fees (?)"           style=dashed  color=blue]  // BO
+    SA    -> Sage  [label="Manual batch import\l(but simpler)"  style=dashed  color=blue]  // BO
+    Third    -> Sage  [label="Integration"     dir=both   style=solid  color=green]  // BO
+    Third    -> Teach [label="Fees and status (?)"    dir=both      style=solid  color=green] // Teachers
+}

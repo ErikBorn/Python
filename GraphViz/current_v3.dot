@@ -1,0 +1,30 @@
+digraph current_v3 {
+    fontsize=10
+    rankdir=LR
+
+    /* === Swim-lane clusters === */
+    subgraph cluster_sys {
+        style=filled  color=black fillcolor=white  label="Student Billing Software Current"  fontsize=12
+        SSS  [shape=record label="{SSS|FA Team|FA Calc & Awards\l}"]
+        SA   [shape=record style=filled fillcolor=pink label="{SchoolAdmin\lFS Enrollment|Admissions|Contracts\lDeposit\lTuition\lSome Fees\l}"]
+        DM   [shape=record style=filled fillcolor=lightgreen label="{DiamondMine\lForms Portal|IT|One-Off Fee Forms\l}"]
+        Sage [shape=record style=filled fillcolor=lightblue label="{Sage Intacct|Business\lOffice|Accounting / GL\lBank Deposits\l}"]
+        Other [shape = record label="Other Fees"]
+        Teach [label="Teachers/Coaches"]
+    }
+    subgraph cluster_people {
+    style=filled  color=black fillcolor=white  label="Responsibility Legend"  fontsize=12
+    BO  [shape=ellipse style=filled fillcolor=lightblue label="Business Office"]
+    ADM [shape=ellipse style=filled fillcolor=pink label="Admissions"]
+    IT  [shape=ellipse style=filled fillcolor=lightgreen label="IT"]
+}
+
+    /* === Flows (colored by responsibility) === */
+    SSS -> SA   [label="Manual\lFA adj. (?)"  style=dashed color=red]                 // BO
+    Other  -> SA   [label="Manual Fees"      style=dashed color=blue]    // BO
+    SA  -> Sage [label="Manual batch import"    style=dashed color=blue]                 // BO
+    DM  -> Sage [label="Manual upload" style=dashed color=blue]  // BO
+    DM -> Teach [label="Ugly export" style=dashed color=green]
+    Other  -> SA   [label="Manual Fees"      style=dashed color=green]    // BO
+
+}
