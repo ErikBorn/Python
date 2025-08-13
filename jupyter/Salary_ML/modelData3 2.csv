@@ -1,0 +1,79 @@
+Employee,ID,25-26 Salary,Hire Date,Gender,Years of Exp,Seniority,Education Level,Skill Rating,Knowledge Rating,Prep Rating,Level
+"Joella, Katie ",3536,"  52,125 ",8/12/2024,F,0,  0 ,BA,0,0.3,0,HS
+"Elston, Caron L",3407,"  52,125 ",11/28/2022,F,0,  2 ,N/A,0,0.3,0,LS
+"Dimond, Olivia D",3526,"  54,210 ",8/12/2024,F,1,  0 ,BA,0,0.3,0,MS
+"Pugh, Hannah E",3529,"  54,210 ",8/12/2024,F,1,  0 ,BA,0,0.3,1,HS
+"Baumgartner, Rachel C",3440,"  54,302 ",8/16/2023,F,3,  1 ,MA,0,0.3,0,MS
+Weintraub,,"  54,302 ",8/15/2019,F ,3,  3 ,N/A,0,0.3,0,LS
+"Herndon, Natalie R",3516,"  55,253 ",8/12/2024,F,3,  0 ,BA,1,0.5,0,MS
+"Rosiere, Diana M",3439,"  56,471 ",8/16/2023,F,3,  1 ,MA,1,0.6,0,MS
+"Porter, Laine M",3514,"  57,338 ",8/12/2024,F,4,  0 ,BA,0,0.3,0,LS
+"Wang, Zhuoqun ",3430,"  58,380 ",8/16/2023,F,4,  1 ,MA,1,0.7,0,Cross
+"Sasine, Corinne P",3197,"  64,114 ",8/16/2019,F,5,  5 ,MA,0,0.7,1,MS
+"Von Tscharner, Emma M",3161,"  55,328 ",10/16/2018,F,6,  6 ,MA,0,0.3,0,LS
+"Berg, Kyle R",3369,"  60,336 ",8/17/2022,M,6,  2 ,BA,0,0.3,0,MS
+"Peters, Emily M",3384,"  61,474 ",8/17/2022,F,6,  2 ,BA,0,0.3,0,LS
+"Burton, Tiffany D",3336,"  62,884 ",12/17/2021,F,6,  2 ,MA,1,1,1,HS
+"Swisher, Mark R",3456,"  62,884 ",8/16/2023,M,8,  1 ,BA,0,0.3,0,MS
+"Gulick, Kate T",3479,"  65,052 ",11/1/2023,F,7,  1 ,MA,0,0.3,0,HS
+"McVie, Geoffry ",2602,"  65,211 ",7/1/2010,M,9,  14 ,BA,0,0.3,0,MS
+"Greenwald, Tess E",3371,"  66,028 ",8/17/2022,F,7,  2 ,MA,0,0.3,0,MS
+"Jung, Jason R",2708,"  66,514 ",2/1/2012,M,9,  13 ,BA,0,0.3,0,MS
+"McFall, Shannon M",3517,"  67,763 ",8/12/2024,F,6,  0 ,MA,1,0.6,0,MS
+"Garcia, Maria G",3545,"  67,763 ",8/12/2024,F,8,  0 ,BA,0,0.5,0,LS
+"Harnar, Casey E",2755,"  68,119 ",10/1/2012,F,7,  12 ,MA,0,0.3,1,HS
+"Bray, Amie M",3520,"  68,805 ",8/12/2024,F,6,  0 ,PhD,0,0.7,0,HS
+"Ochoa, Melissa B",3057,"  69,205 ",4/1/2017,F,8,  7 ,MA,1,0.7,0,LS
+"Passin, Laura E",3248,"  69,603 ",8/20/2020,F,7,  4 ,PhD,0,0.3,0,HS
+"McGrath, Alexandra F",3532,"  69,848 ",8/12/2024,F,7,  0 ,MA,0,0.7,0,MS
+"Romano, Bridget M",2881,"  70,013 ",9/2/2014,F,9,  10 ,MA,0,0.3,0,LS
+"Barocas, Anne ",3135,"  70,243 ",8/17/2018,F,10,  6 ,BA,0,0.3,0,LS
+"Callis, Carolyn P",3432,"  70,473 ",8/16/2023,F,10,  1 ,MA,0,0.3,0,MS
+"Wang, Xiaomeng ",3535,"  70,890 ",8/12/2024,F,6,  0 ,MA,1,1,1,HS
+"Brown, Michelle C",3301,"  72,403 ",8/17/2021,F,10,  3 ,MA,1,0.6,0,MS
+"McHugh, John N",3285,"  76,387 ",8/17/2021,M,7,  3 ,MA,0,0.5,0,Cross
+"Fonseca, Ana J",2600,"  66,744 ",8/17/2010,F,15,  14 ,MA,1,0.8,1,HS
+"Courtney, Heather M",3437,"  67,220 ",8/16/2023,F,11,  1 ,BA,0,0.3,0,LS
+"Garcia, Christina ",2565,"  67,395 ",1/4/2010,F,13,  15 ,MA,1,0.5,0,MS
+"Valin, Josh N",3438,"  68,196 ",8/16/2023,M,12,  1 ,MA,1,0.5,0,MS
+"McGown, Amber",2632,"  69,223 ",9/1/2010,F,13,  6 ,BA,0,0.3,0,LS
+"Ponce, Tomas M",3525,"  69,848 ",8/12/2024,M,15,  0 ,MA,0,0.3,0,MS
+"Tuck, Dane P",3434,"  70,473 ",8/16/2023,M,14,  1 ,BA,0,0.3,0,MS
+"Hollway, Margaret F",3302,"  71,655 ",8/17/2021,F,14,  3 ,MA,0,0.3,0,LS
+"Goforth, Elizabeth A",3083,"  71,655 ",8/18/2017,F,14,  7 ,MA,0,0.3,0,LS
+"Farrell, Julie",3287,"  73,609 ",8/17/2021,F,13,  8 ,MA,0,0.3,0,LS
+"Shipley, Kelly L",3247,"  77,061 ",8/21/2020,F,15,  4 ,MA,1,1,1,HS
+"Chen, Xingyun ",2814,"  77,555 ",8/19/2013,F,11,  11 ,N/A,1,1,0,HS
+"LaRocque, Carol A",3191,"  81,055 ",7/29/2019,F,11,  5 ,MA,0,0.3,0,LS
+"Turnbull, Jennie ",3033,"  57,463 ",11/14/2016,F,16,  4 ,BA,0,0.3,0,MS
+"Lantagne, Michael K",3196,"  64,318 ",8/16/2019,M,19,  5 ,BA,0,0.3,0,HS
+"Tullar, Timothy R",3379,"  67,166 ",8/17/2022,M,17,  2 ,BA,0,0.3,0,LS
+"Herman, Bonnie J",3453,"  67,220 ",8/16/2023,F,19,  1 ,MA,1,0.7,0,HS
+"Aragon, Shannon ",3131,"  67,540 ",8/17/2018,F,18,  6 ,BA,0,0.3,0,LS
+"Valdez, Savannah G",3515,"  69,848 ",8/12/2024,F,16,  0 ,MA,0,0.3,0,LS
+"Gordon, Heather A",3192,"  70,761 ",8/16/2019,F,17,  5 ,MA,0,0.8,0,HS
+"Boss, Christine M",2945,"  70,967 ",8/24/2015,F,16,  9 ,MA,1,1,1,HS
+"Summers, Amber ",2183,"  71,209 ",1/4/2005,F,20,  20 ,MA,0,0.3,0,HS
+"Rehmer, Rosemary ",2956,"  71,244 ",9/9/2015,F,17,  9 ,MA,1,1,0,HS
+"Zinge, Kelley C",3380,"  71,720 ",8/17/2022,F,17,  2 ,MA,0,0.5,0,Cross
+"Ferrill Roman, Bonnie M",3372,"  73,997 ",8/17/2022,F,17,  2 ,MA,0,0.3,1,HS
+"Kirchner, Rachel Y",3534,"  77,145 ",8/12/2024,F,18,  0 ,MA,0,0.3,0,MS
+"Jewett, Jeffrey T",3252,"  77,689 ",8/21/2020,M,19,  4 ,MA,0,0.3,0,MS
+"Hill, Bettye",3151,"  82,201 ",8/19/2013,F,17,  11 ,MA,0,0.3,0,LS
+"Johnson, Marie F",3108,"  90,045 ",12/1/2017,F,17,  7 ,PhD,1,1,1,HS
+"Hon, Rebecca M",3245,"  65,259 ",8/21/2020,F,23,  4 ,MA,0,0.3,0,LS
+"Irwin, Michelle D",2944,"  75,504 ",8/21/2015,F,25,  9 ,MA,0,0.3,0,LS
+"Riehl, Joe ",3014,"  76,288 ",8/19/2016,M,21,  8 ,MA,0,0.3,1,MS
+"May, Julie ",1426,"  77,182 ",8/24/1998,F,24,  26 ,MA,0,0.3,0,HS
+"Ferguson, Kristen A",1674,"  79,861 ",9/1/2000,F,24,  24 ,MA,1,0.7,0,HS
+"Barton, Sarah F",3303,"  88,090 ",8/17/2021,F,21,  3 ,MA,0,0.3,0,MS
+"Evans, Anne E",2599,"  90,178 ",8/17/2010,F,22,  14 ,MA,0,0.3,1,HS
+"Sniegowski, Peter ",1574,"  80,874 ",9/1/2000,M,27,  24 ,MA,0,0.3,0,HS
+"Beckham, Wallace A",1675,"  88,717 ",9/1/2000,M,30,  24 ,MA,0,0.3,1,HS
+"Gentry, Phillip M",1092,"  95,382 ",10/25/1995,M,27,  29 ,BA,0,1,0,HS
+"Rodgers, Andy ",1224,"  79,173 ",10/21/1992,M,33,  32 ,BA,0,0.3,0,MS
+"Otto, Theresa J",3195,"  79,378 ",8/16/2019,F,34,  5 ,MA,1,0.6,0,MS
+"McCall, Ines A",1237,"  90,142 ",4/1/1997,F,37,  27 ,BA,1,0.5,0,LS
+"Easton, Terrance ",1438,"  90,370 ",8/24/1998,M,38,  26 ,BA,0,0.3,0,MS
+"Hamilton, Darla J",1101,"  94,341 ",9/1/1991,F,42,  33 ,MA,0,0.3,0,LS
+"Pattison, Michael G",1590,"  101,894 ",9/1/2000,M,48,  24 ,MA,1,0.6,0,MS
