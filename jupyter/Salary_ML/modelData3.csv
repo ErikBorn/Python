@@ -1,4 +1,4 @@
-Employee,ID,25-26 Salary,Hire Date,Gender,Years of Exp,Seniority,Education Level,Skill Rating,Knowledge Rating,Prep Rating,Level
+Employee,"ID",25-26 Salary,Hire Date,Gender,Years of Exp,Seniority,Education Level,Skill Rating,Knowledge Rating,Prep Rating,Level
 "Joella, Katie ",3536,"  52,125 ",8/12/2024,F,0,  0 ,BA,0,0.3,0,HS
 "Elston, Caron L",3407,"  52,125 ",11/28/2022,F,0,  2 ,N/A,0,0.3,0,LS
 "Dimond, Olivia D",3526,"  54,210 ",8/12/2024,F,1,  0 ,BA,0,0.3,0,MS
@@ -43,7 +43,7 @@ Weintraub,,"  54,302 ",8/15/2019,F ,3,  3 ,N/A,0,0.3,0,LS
 "Goforth, Elizabeth A",3083,"  71,655 ",8/18/2017,F,14,  7 ,MA,0,0.3,0,LS
 "Farrell, Julie",3287,"  73,609 ",8/17/2021,F,13,  8 ,MA,0,0.3,0,LS
 "Shipley, Kelly L",3247,"  77,061 ",8/21/2020,F,15,  4 ,MA,1,1,1,HS
-"Chen, Xingyun ",2814,"  77,555 ",8/19/2013,F,11,  11 ,N/A,1,1,0,HS
+"Chen, Xingyun ",2814,"  77,555 ",8/19/2013,F,11,  11 ,PhD,1,1,0,HS
 "LaRocque, Carol A",3191,"  81,055 ",7/29/2019,F,11,  5 ,MA,0,0.3,0,LS
 "Turnbull, Jennie ",3033,"  57,463 ",11/14/2016,F,16,  4 ,BA,0,0.3,0,MS
 "Lantagne, Michael K",3196,"  64,318 ",8/16/2019,M,19,  5 ,BA,0,0.3,0,HS

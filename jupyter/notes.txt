@@ -1,0 +1,13 @@
+Catagories for faculty: Teaching faculty, teaching assistants, non-instructional teachers, administrative
+Other factors: Skill rating, Catagory ^, 
+
+Scatter with the bands clearly labelled
+
+Next steps:
+    Add in the catagories, clean up skill ratings
+    Run the models again
+    Sub-charts for different catagories (TAs)
+
+New stuff (9/8/25)
+Take the cohort data, add a slider by percentile that allows us to "fit" the data, with a +/- percentage graphically drawn
+Can we then flag the "underliers" and then sum those differences to get them on to the band?
