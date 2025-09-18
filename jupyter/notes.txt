@@ -11,3 +11,9 @@ Next steps:
 New stuff (9/8/25)
 Take the cohort data, add a slider by percentile that allows us to "fit" the data, with a +/- percentage graphically drawn
 Can we then flag the "underliers" and then sum those differences to get them on to the band?
+
+Steps:
+1. Figure out how to come up with a number from the percentile of our cohort data (need to move the data into Python I think)
+2. Get these graphed with an adjustable percentage range
+3. Add in the slider
+4. Make sure we can then use the interactive plot, even if it's disjointed
