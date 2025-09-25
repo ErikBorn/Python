@@ -1,0 +1,40 @@
+paths:
+  cohort_csv: data/cohort.csv
+  staff_csv:  data/staff.csv
+  out_dir:    outputs
+
+cohort:
+  target_percentile: 50
+  target_inflation: 0.00
+
+nonlinear:
+  base_salary: 55000
+  exp_base_per_year: 1550
+  exp_half_life_years: 15
+  sen_base_per_year: 800
+  sen_half_life_years: 15
+  ma_pct: 0.04
+  phd_pct: 0.08
+  stack_degrees: false
+  w_skill: 0
+  w_prep: 0
+  w_knowledge: 0
+  level_adders: {LS: 0, MS: 0, HS: 0}
+  aim_multiplier: 1.0
+  f_non_sen: 0.67   # non-seniority years credit
+
+piecewise:
+  edges: [0,5,10,15,20,25,30,35,40,45]
+  round_base: 100
+  round_step: 50
+  enforce_continuity: true
+  shrink_to_total: "Model NL Salary"  # or null
+
+planning:
+  bump: 0.02
+  tol: 0.02
+  keep_above_uplift: 0.02
+
+plots:
+  plus_minus_pct: 0.10
+  include_models: ["Real","NLM","RPB","PW"]
