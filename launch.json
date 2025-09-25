@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run pipeline",
+      "type": "python",
+      "request": "launch",
+      "program": "PYTHON/scripts/run_pipeline.py",
+      "console": "integratedTerminal",
+      "env": {
+        "PYTHONPATH": "PYTHON"
+      },
+      "args": ["--config", "config.yaml"]
+    }
+  ]
+}
