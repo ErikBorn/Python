@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 
 from .nonlinear import degree_multiplier_series
+# at top
+from typing import List, Dict, Callable, Iterable, Optional
 
 
 def _round_to(x: float, base: int) -> float:
@@ -174,27 +176,12 @@ def pw_predict(
     ma_pct: float,
     phd_pct: float,
     stack_degrees: bool = False,
+    *,
+    prep_flag: Optional[pd.Series] = None,   # NEW
+    prep_bonus: float = 2500.0,              # NEW
 ) -> np.ndarray:
     """
-    Predict salaries from a piecewise BA schedule + degree multipliers.
-
-    Parameters
-    ----------
-    total_years
-        Numpy array of TotalYears for each person (already computed, e.g., using
-        `total_years(yrs, sen, f_non_sen)` from nonlinear.py).
-    edu
-        Pandas Series of 'Education Level' strings (used for multipliers).
-    pw_bands
-        Output from derive_pw_bands_ols.
-    ma_pct, phd_pct
-        Degree multipliers: 0.02 => +2%, etc.
-    stack_degrees
-        If True, MA and PhD multipliers stack multiplicatively; otherwise PhD overrides MA.
-
-    Returns
-    -------
-    np.ndarray of predicted salaries.
+    Predict salaries from a piecewise BA schedule + degree multipliers (+ optional flat Prep bonus).
     """
     t = np.asarray(total_years, dtype=float)
     out = np.full_like(t, np.nan, dtype=float)
@@ -205,15 +192,16 @@ def pw_predict(
         b = band["TotalYears_End"]
         base = band["BA_Start"]
         step = band["BA_Step_per_Year"]
-
-        if np.isfinite(b):
-            m = (t >= a) & (t <= b)
-        else:
-            m = (t >= a)
-
+        m = (t >= a) if not np.isfinite(b) else ((t >= a) & (t <= b))
         out[m] = base + (t[m] - a) * step
 
-    # Degree multipliers
+    # Degree multipliers (multiplicative)
     mult = degree_multiplier_series(edu, ma_pct=ma_pct, phd_pct=phd_pct, stack=stack_degrees)
+    out = out * mult
 
-    return out * mult
+    # Flat Prep bonus (additive)
+    if prep_flag is not None:
+        pf = pd.to_numeric(prep_flag, errors="coerce").fillna(0).to_numpy()
+        out = out + np.where(pf == 1, float(prep_bonus), 0.0)
+
+    return out

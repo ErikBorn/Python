@@ -1,6 +1,3 @@
-,Mean %ile (Plan),Mean %ile (Raw),Median %ile (Plan),Median %ile (Raw)
-CONS,66.3,57.7,69.1,54.8
-NLM,62.4,52.9,65.7,48.9
-PW,62.5,53.0,65.8,49.2
-RPB,74.7,70.1,72.6,69.1
-Real,,49.4,,43.2
+,25-26 Salary,RPB Salary,Model NL Salary,PW,CONS Salary,CONS_CAP Salary
+Mean %ile,52.8,70.0,54.4,56.9,60.6,58.9
+Median %ile,48.0,69.8,51.6,58.8,61.1,60.0

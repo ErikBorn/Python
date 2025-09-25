@@ -21,16 +21,15 @@ def _fmt_money(x: float) -> str:
 # 1) Plot cohort bands at a target percentile
 # ----------------------------
 
+# src/viz.py (in _DEFAULT_COLORS)
 _DEFAULT_COLORS = {
-    "Real": "#1f77b4",   # blue
-    "EGB_LM": "#7f7f7f",  # gray
-    "EGB_NLM": "#2ca02c", # green
-    "SLM": "#ff7f0e",     # orange
-    "RPB": "#d62728",     # red
-    "NLM": "#2ca02c",     # alias
-    "PW": "#9467bd",      # purple
-    "PWR": "#17becf",     # cyan
-    "CONS": "#8c564b",   # brown (distinct from others)
+    "Real": "#1f77b4",
+    "RPB":  "#d62728",
+    "NLM":  "#2ca02c",
+    "PW":   "#9467bd",
+    "PWR":  "#17becf",
+    "CONS": "#8c564b",
+    "CONS_CAP": "#e377c2",   # NEW: magenta/pink
 }
 
 def plot_bands(

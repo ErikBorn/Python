@@ -1,5 +1,6 @@
 # src/models/consultant.py
 from __future__ import annotations
+from typing import Optional
 import numpy as np
 import pandas as pd
 import re
@@ -9,6 +10,12 @@ from src.cohort import build_band_bins_closed, interpolate_salary_strict
 # Reuse the same degree parsing style we used elsewhere
 _MA_PAT = re.compile(r"(?i)\b(?:MA|M\.A\.|MS|M\.S\.|MEd|M\.Ed)\b")
 _PHD_PAT = re.compile(r"(?i)\b(?:PhD|Ph\.D\.|EdD|Ed\.D\.)\b")
+
+def _coerce_flag(s: Optional[pd.Series]) -> np.ndarray:
+    if s is None:
+        return None
+    # Accept 0/1, booleans, or truthy strings; treat NaN as 0
+    return pd.to_numeric(s, errors="coerce").fillna(0).to_numpy(dtype=float)
 
 def _degree_multiplier(edu: pd.Series, *, ba_pct: float, ma_pct: float, phd_pct: float) -> np.ndarray:
     edu = edu.astype(str).str.strip()
@@ -89,6 +96,9 @@ def consultant_predict(
     deg_phd_pct: float = 0.04,
     years_col: str = "Years of Exp",
     edu_col: str = "Education Level",
+    # NEW:
+    prep_col: str = "Prep",          # set to your flag column; fallback handled below
+    prep_bonus: float = 2500.0,
 ) -> pd.Series:
     """
     Consultant model:
@@ -96,23 +106,76 @@ def consultant_predict(
             (0, base_start) and (start+3, band_target) for each 5y band.
       - Apply degree multiplier: BA -4%, MA 0%, PhD +4% (configurable)
       - Inflation applied to all anchors.
-
-    Returns a pd.Series aligned to staff.index named "CONS Salary".
+      - NEW: flat +prep_bonus if staff[prep_col] == 1 (after degree multiplier).
     """
+    # --- anchors & baseline interpolation (your existing helpers) ---
     xp, fp = _build_anchors(
         long,
         target_percentile=target_percentile,
         inflation=inflation,
         base_start=base_start,
     )
-
     yrs = pd.to_numeric(staff[years_col], errors="coerce").fillna(0.0).to_numpy(dtype=float)
-    base_curve = _interp_with_tail(yrs, xp, fp)
+    base_curve = _interp_with_tail(yrs, xp, fp)  # ndarray
 
-    mult = _degree_multiplier(
-        staff.get(edu_col, pd.Series(index=staff.index, dtype="object")),
-        ba_pct=deg_ba_pct, ma_pct=deg_ma_pct, phd_pct=deg_phd_pct
-    )
+    # --- degree multiplier ---
+    edu = staff.get(edu_col, pd.Series(index=staff.index, dtype="object")).astype(str)
+    has_ba  = edu.str.contains(r"(?i)\bBA|B\.A\.\b",  na=False)
+    has_ma  = edu.str.contains(r"(?i)\bMA|M\.A\.|MS|M\.S\.|MEd|M\.Ed\b", na=False)
+    has_phd = edu.str.contains(r"(?i)\bPhD|Ph\.D\.|EdD|Ed\.D\.\b",      na=False)
 
-    out = base_curve * mult
-    return pd.Series(out, index=staff.index, name="CONS Salary")
+    mult = np.ones(len(staff), dtype=float)
+    mult = np.where(has_ba.to_numpy(),  mult * (1.0 + deg_ba_pct), mult)
+    mult = np.where(has_ma.to_numpy(),  mult * (1.0 + deg_ma_pct), mult)
+    mult = np.where(has_phd.to_numpy(), mult * (1.0 + deg_phd_pct), mult)
+
+    y = base_curve * mult
+
+    # --- NEW: flat prep bonus ---
+    # accept either `prep_col` or fallback to "Prep Rating" if present
+    prep_series = staff.get(prep_col, staff.get("Prep Rating"))
+    pf = _coerce_flag(prep_series)
+    if pf is not None and np.any(pf > 0):
+        y = y + pf * float(prep_bonus)
+
+    return pd.Series(y, index=staff.index, name="CONS Salary")
+
+
+def consultant_predict_capped(
+    staff: pd.DataFrame,
+    long: pd.DataFrame,
+    *,
+    target_percentile: float,
+    inflation: float,
+    base_start: float | None = None,
+    deg_ba_pct: float = -0.04,
+    deg_ma_pct: float = 0.00,
+    deg_phd_pct: float = 0.04,
+    max_salary: float | None = 100_000.0,
+    # NEW:
+    years_col: str = "Years of Exp",
+    edu_col: str = "Education Level",
+    prep_col: str = "Prep",
+    prep_bonus: float = 2500.0,
+) -> pd.Series:
+    """
+    Same logic as consultant_predict (including flat Prep bonus), then cap at `max_salary`.
+    """
+    y = consultant_predict(
+        staff, long,
+        target_percentile=target_percentile,
+        inflation=inflation,
+        base_start=base_start,
+        deg_ba_pct=deg_ba_pct,
+        deg_ma_pct=deg_ma_pct,
+        deg_phd_pct=deg_phd_pct,
+        years_col=years_col,
+        edu_col=edu_col,
+        prep_col=prep_col,
+        prep_bonus=prep_bonus,
+    ).astype(float)
+
+    if max_salary is not None and np.isfinite(max_salary):
+        y = np.minimum(y.to_numpy(dtype=float), float(max_salary))
+
+    return pd.Series(y, index=staff.index, name="CONS_CAP Salary")

@@ -16,6 +16,8 @@ from src.planning import plan_salary_column, plan_costs
 from src.viz import plot_bands, plot_scatter_models
 from src.models.consultant import consultant_predict
 from src.viz import plot_scatter_models_interactive
+from src.policies import apply_outside_exp_cap
+from src.models.consultant import consultant_predict, consultant_predict_capped
 
 def make_nl_baseline_fn(nl_params: dict):
     """
@@ -52,12 +54,22 @@ def main(cfg):
     long  = load_cohort(paths["cohort_csv"])        # tidy long
     staff = load_staff(paths["staff_csv"])          # raw staff -> cleaned
 
+    # 1b) Apply outside-experience policy EARLY
+    xp_cfg = cfg.get("experience_policy", {})
+    staff = apply_outside_exp_cap(
+        staff,
+        years_col="Years of Exp",
+        seniority_col="Seniority",
+        skill_flag_col=xp_cfg.get("skill_endorsement_col"),  # e.g. "Skill Endorsement"
+        cap=float(xp_cfg.get("cap_outside_years", 10))
+    )
     # 2) RPB
     staff["RPB Salary"] = compute_rpb(
         long, staff,
         target_percentile=cfg["cohort"]["target_percentile"],
         target_inflation=cfg["cohort"]["target_inflation"]
     )
+    
     # 3) Nonlinear model
     nl = cfg["nonlinear"]
     staff["Model NL Salary"] = nonlinear_predict(staff, **nl)
@@ -79,9 +91,11 @@ def main(cfg):
     # predict PW with degree multipliers
     staff["PW"] = pw_predict(
         total_years=total_years(staff["Years of Exp"], staff["Seniority"], nl["f_non_sen"]),
-        edu=staff.get("Education Level",""),
+        edu=staff.get("Education Level", ""),
         pw_bands=pw_bands,
-        ma_pct=nl["ma_pct"], phd_pct=nl["phd_pct"], stack_degrees=nl["stack_degrees"]
+        ma_pct=nl["ma_pct"], phd_pct=nl["phd_pct"], stack_degrees=nl["stack_degrees"],
+        prep_flag=staff.get("Prep", staff.get("Prep Rating")),  # uses "Prep" or falls back to "Prep Rating"
+        prep_bonus=cfg["piecewise"]["prep_bonus"]  # or cfg["piecewise"]["prep_bonus"]
     )
 
     cola = cfg["planning"]["bump"]         # e.g. 0.02
@@ -97,6 +111,10 @@ def main(cfg):
     )
     # 4b) Consultant model
     cns = cfg["consultant"]
+    cns_cap_cfg = cfg["consultant_capped"]
+    prep_series_name = cfg.get("prep", {}).get("flag_col", "Prep")
+    prep_bonus = cfg.get("prep", {}).get("bonus", 2500.0)
+
     staff["CONS Salary"] = consultant_predict(
         staff, long,
         target_percentile=cns["target_percentile"],
@@ -105,13 +123,28 @@ def main(cfg):
         deg_ba_pct=cns["deg_ba_pct"],
         deg_ma_pct=cns["deg_ma_pct"],
         deg_phd_pct=cns["deg_phd_pct"],
+        prep_col=prep_series_name,
+        prep_bonus=prep_bonus,
+    )
+
+    staff["CONS_CAP Salary"] = consultant_predict_capped(
+        staff, long,
+        target_percentile=cns_cap_cfg.get("target_percentile", cns["target_percentile"]),
+        inflation=cns_cap_cfg.get("inflation", cns["inflation"]),
+        base_start=cns_cap_cfg.get("base_start", cns.get("base_start")),
+        deg_ba_pct=cns_cap_cfg.get("deg_ba_pct", cns["deg_ba_pct"]),
+        deg_ma_pct=cns_cap_cfg.get("deg_ma_pct", cns["deg_ma_pct"]),
+        deg_phd_pct=cns_cap_cfg.get("deg_phd_pct", cns["deg_phd_pct"]),
+        max_salary=cns_cap_cfg.get("max_salary", 100_000),
+        prep_col=prep_series_name,
+        prep_bonus=prep_bonus,
     )
 
     # 5) Plans & costs (raise-to-model-or-2% bump)
     bump, tol = cfg["planning"]["bump"], cfg["planning"]["tol"]
 
     # Create the plan salary columns first
-    for label, col in [("PW","PW"), ("NLM","Model NL Salary"), ("RPB","RPB Salary"), ("CONS","CONS Salary")]:
+    for label, col in [("PW","PW"), ("NLM","Model NL Salary"), ("RPB","RPB Salary"), ("CONS","CONS Salary"), ("CONS_CAP","CONS_CAP Salary"),]:
         out_col = f"{label} Plan Salary"
         staff[out_col] = plan_salary_column(staff, "25-26 Salary", col, out_col,
                                             bump=cfg["planning"]["bump"],
@@ -140,14 +173,16 @@ def main(cfg):
             "PW Plan Salary",      # if you still keep the raw PW-plan column
             "NLM Plan Salary",
             "RPB Plan Salary",
-            "CONS Plan Salary"
+            "CONS Plan Salary",
+            "CONS_CAP Plan Salary",          # NEW
         ],
         labels=[
             # "PWR",
             "PW",
             "NLM",
             f"RPB ({cfg['cohort']['target_percentile']}%)",
-            "CONS"
+            "CONS",
+            "CONS_CAP",                      # NEW
         ],
         bump_compare=0.02,     # keeps the “All +2%” comparison row
         format_output=True
@@ -172,7 +207,6 @@ def main(cfg):
         decimals=1,
     )
     
-
     os.makedirs(f"{out}/tables", exist_ok=True)
     band_pct_med.to_csv(f"{out}/tables/band_percentile_medians.csv")
 
@@ -225,10 +259,16 @@ def main(cfg):
     final.columns = [f"{metric} ({version})" for metric, version in final.columns]
 
     # Write out
-    final.to_csv(f"{out}/tables/achieved_percentiles.csv")
+    pct = achieved_percentiles(
+            long, staff,
+            salary_cols=["25-26 Salary", "RPB Salary", "Model NL Salary", "PW", "CONS Salary", "CONS_CAP Salary"]
+        ).round(1)
+    pct.to_csv(f"{out}/tables/achieved_percentiles.csv")
 
-    band_tbl = band_medians_table(long, staff,
-        salary_cols=["25-26 Salary", "RPB Salary", "Model NL Salary", "PW", "CONS Salary"])
+    band_tbl = band_medians_table(
+        long, staff,
+        salary_cols=["25-26 Salary", "RPB Salary", "Model NL Salary", "PW", "CONS Salary", "CONS_CAP Salary"]
+    )
     # (your existing rounding/formatting block follows)
 
     # -------- Option A: keep numeric; format only when saving --------
@@ -264,7 +304,8 @@ def main(cfg):
         # "NLM": "Model NL Salary",
         # "PW": "PW",
         "PWR": "PWR Salary",   # cyan
-        "CONS":"CONS Salary",
+        # "CONS":"CONS Salary",
+        "CONS_CAP": "CONS_CAP Salary",
     }
 
     plot_bands(
@@ -282,7 +323,8 @@ def main(cfg):
         # "RPB": "RPB Salary",
         # "NLM": "Model NL Salary",
         "PW": "PW",
-        "CONS":"CONS Salary",
+        # "CONS":"CONS Salary",
+        "CONS_CAP": "CONS_CAP Salary",
         # "PWR": "PWR Salary",   # cyan
     }
 
@@ -325,6 +367,7 @@ def main(cfg):
             "RPB": _model_summary("RPB", "RPB Plan Salary"),
             # include consultant / PWR variants if you want:
             "CONS": _model_summary("CONS", "CONS Plan Salary"),
+            "CONS_CAP": _model_summary("CONS_CAP", "CONS_CAP Plan Salary"),
         }
     }
 
@@ -335,6 +378,7 @@ def main(cfg):
         "NLM":  "Model NL Salary",
         "PW":   "PW",
         "CONS": "CONS Salary",
+        "CONS_CAP": "CONS_CAP Salary",
         "PWR":  "PW Plan Salary",   # optional to show the plan outcome as a series
     }
 
@@ -361,16 +405,18 @@ def main(cfg):
 
     # 2) Desired order for the calculated/model columns
     calc_cols_desired = [
-        "RPB Salary",
-        "Model NL Salary",
-        "PW",
-        "PW Plan Salary",
-        "NLM Plan Salary",
-        "RPB Plan Salary",
-        "All +2% Plan Salary",
-        "CONS Salary",
-        "CONS Plan Salary"
-    ]
+            "RPB Salary",
+            "Model NL Salary",
+            "PW",
+            "CONS Salary",
+            "CONS_CAP Salary",      # NEW
+            "PW Plan Salary",
+            "NLM Plan Salary",
+            "RPB Plan Salary",
+            "CONS Plan Salary",
+            "CONS_CAP Plan Salary", # NEW
+            "All +2% Plan Salary",
+        ]
     calc_cols_present = [c for c in calc_cols_desired if c in staff.columns]
 
     # 3) Build final column order:
