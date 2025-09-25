@@ -2,99 +2,23 @@
 
 from __future__ import annotations
 from typing import Dict, List, Iterable, Optional
+from .cohort import build_band_bins_closed, band_range_closed, interpolate_salary_strict
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
-from .cohort import build_band_bins_closed, band_range_closed, interpolate_salary_strict
+# --- add near the top of src/viz.py ---
+def _fmt_money(x: float) -> str:
+    try:
+        return f"${x:,.0f}"
+    except Exception:
+        return ""
 
 
 # ----------------------------
 # 1) Plot cohort bands at a target percentile
-# ----------------------------
-
-def plot_bands(
-    long: pd.DataFrame,
-    target_percentile: float,
-    plus_minus_pct: float,
-    path_png: Optional[str] = None,
-    title_suffix: str = "Cohort",
-    max_years_override: Optional[int] = None,   # NEW: allow manual cap
-):
-    bins, bands_order = build_band_bins_closed(long)
-
-    # Compute per-band target salaries
-    segs = []
-    for start, end, label in bins:
-        y = interpolate_salary_strict(long, label, float(target_percentile))
-        if np.isnan(y):
-            continue
-        segs.append((float(start), float(end), str(label), float(y)))
-
-    if not segs:
-        raise RuntimeError("No bands to plot (check `long` and target_percentile).")
-
-    # ---- Safe bounds (avoid inf) ----
-    # Finite ends (e.g., 5, 10, ..., 40)
-    finite_ends = [e for _, e, _, _ in segs if np.isfinite(e)]
-    if finite_ends:
-        finite_cap = max(finite_ends)
-    else:
-        finite_cap = 0.0
-
-    # If there’s an open-ended band, draw it as 5-year width from its start
-    open_band_draw_caps = [
-        s + 5.0 for s, e, _, _ in segs if not np.isfinite(e)
-    ]
-
-    # Choose the max x from finite ends, open-band draw caps, and a floor of 40
-    computed_max_x = max([40.0, finite_cap] + open_band_draw_caps)  # all finite
-    max_x = int(max_years_override if max_years_override is not None else computed_max_x)
-
-    # Y bounds
-    vals = [v for *_, v in segs]
-    min_y = float(np.nanmin(vals))
-    max_y = float(np.nanmax(vals))
-    y_pad = 0.08 * (max_y - min_y if max_y > min_y else max_y)
-
-    # ---- Plot ----
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    for start, end, label, val in segs:
-        x0 = start
-        x1 = end if np.isfinite(end) else (start + 5.0)  # draw open band as 5-year segment
-        ax.hlines(val, x0, x1, linewidth=4, color="C0")
-
-        y_lo = val * (1 - plus_minus_pct)
-        y_hi = val * (1 + plus_minus_pct)
-        ax.hlines(y_lo, x0, x1, linewidth=1.5, linestyles="dashed", color="C0")
-        ax.hlines(y_hi, x0, x1, linewidth=1.5, linestyles="dashed", color="C0")
-        ax.vlines([x0, x1], ymin=y_lo, ymax=y_hi, colors="gray", linewidth=0.6, alpha=0.35)
-
-        mid_x = (x0 + x1) / 2.0
-        ax.text(mid_x, val, label, ha="center", va="bottom", fontsize=9)
-
-    ax.set_xlim(0, max_x)
-    ax.set_ylim(min_y - y_pad, max_y + y_pad)
-    ax.set_xlabel("Years of Experience")
-    ax.set_ylabel("Salary ($)")
-    ax.set_title(
-        f"Benchmark Salary Bands @ P{int(round(target_percentile))}  ({title_suffix})\n"
-        f"Dashed lines at ±{plus_minus_pct*100:.0f}%"
-    )
-    ax.grid(axis="y", alpha=0.2)
-    ax.set_xticks(np.arange(0, max_x + 1, 5))
-
-    fig.tight_layout()
-    if path_png:
-        fig.savefig(path_png, dpi=160, bbox_inches="tight")
-        plt.close(fig)
-        return None
-    return fig, ax
-
-
-# ----------------------------
-# 2) Scatter: Real and model columns vs years
 # ----------------------------
 
 _DEFAULT_COLORS = {
@@ -105,7 +29,119 @@ _DEFAULT_COLORS = {
     "RPB": "#d62728",     # red
     "NLM": "#2ca02c",     # alias
     "PW": "#9467bd",      # purple
+    "PWR": "#17becf",     # cyan
+    "CONS": "#8c564b",   # brown (distinct from others)
 }
+
+def plot_bands(
+    long: pd.DataFrame,
+    target_percentile: float,
+    plus_minus_pct: float,
+    path_png: Optional[str] = None,
+    title_suffix: str = "Cohort",
+    staff: Optional[pd.DataFrame] = None,             # NEW: allow overlay scatters
+    years_col: str = "Years of Exp",
+    cols_dict: Optional[Dict[str, str]] = None,
+    colors: Optional[Dict[str, str]] = None,
+):
+    """
+    Draw cohort benchmark bands at a target percentile.
+    Optionally overlay scatterplots for staff models (like plot_scatter_models).
+    """
+    bins, bands_order = build_band_bins_closed(long)
+
+    # Compute per-band target salaries
+    segs = []
+    for start, end, label in bins:
+        y = interpolate_salary_strict(long, label, float(target_percentile))
+        if np.isnan(y):
+            continue
+        segs.append((start, end, label, float(y)))
+
+    if not segs:
+        raise RuntimeError("No bands to plot (check `long` and target_percentile).")
+
+    # Determine plot bounds
+    # --- Determine plot bounds (SAFE to open-ended bands) ---
+    # 1) take only finite band ends
+    finite_ends = [e for _, e, _, _ in segs if np.isfinite(e)]
+    bands_max = max(finite_ends) if finite_ends else 40
+
+    # 2) if staff provided, include their max years so scatters aren't clipped
+    staff_max = 0
+    if staff is not None and years_col in staff.columns:
+        staff_years = pd.to_numeric(staff[years_col], errors="coerce")
+        if staff_years.notna().any():
+            staff_max = float(staff_years.max())
+
+    # 3) final x upper bound (cap at least 40)
+    max_x = int(max(40.0, bands_max, staff_max))
+    min_y = float(np.nanmin([s for *_, s in segs]))
+    max_y = float(np.nanmax([s for *_, s in segs]))
+    y_pad = 0.08 * (max_y - min_y if max_y > min_y else max_y)
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # --- draw bands ---
+    for start, end, label, val in segs:
+        x0, x1 = start, (end if np.isfinite(end) else start + 5)
+        ax.hlines(val, x0, x1, linewidth=4, color="C0")
+        y_lo = val * (1 - plus_minus_pct)
+        y_hi = val * (1 + plus_minus_pct)
+        ax.hlines(y_lo, x0, x1, linewidth=1.5, linestyles="dashed", color="C0")
+        ax.hlines(y_hi, x0, x1, linewidth=1.5, linestyles="dashed", color="C0")
+        ax.vlines([x0, x1], ymin=y_lo, ymax=y_hi, colors="gray", linewidth=0.6, alpha=0.35)
+        mid_x = (x0 + x1) / 2.0
+        ax.text(mid_x, val, label, ha="center", va="bottom", fontsize=9)
+
+    # --- overlay scatters if staff provided ---
+    if staff is not None and cols_dict is not None:
+        colors = {**_DEFAULT_COLORS, **(colors or {})}
+        x = pd.to_numeric(staff[years_col], errors="coerce").to_numpy()
+        jitter = np.linspace(-0.15, 0.15, num=max(3, len(cols_dict)))
+
+        for i, (label, col) in enumerate(cols_dict.items()):
+            if col not in staff.columns:
+                continue
+            y = pd.to_numeric(staff[col], errors="coerce").to_numpy()
+            m = np.isfinite(x) & np.isfinite(y)
+            if not np.any(m):
+                continue
+            ax.scatter(
+                x[m] + (jitter[i] if i < len(jitter) else 0.0),
+                y[m],
+                s=24,
+                alpha=0.85,
+                color=colors.get(label, None),
+                label=label,
+            )
+
+        ax.legend(loc="lower right")
+
+    # cosmetics
+    ax.set_xlim(0, max_x)
+    ax.set_ylim(min_y - y_pad, max_y + y_pad)
+    ax.set_xlabel("Years of Experience")
+    ax.set_ylabel("Salary ($)")
+    ax.set_title(
+        f"Benchmark Salary Bands @ P{int(round(target_percentile))} ({title_suffix})\n"
+        f"Dashed lines at ±{plus_minus_pct*100:.0f}%"
+    )
+    ax.grid(axis="y", alpha=0.2)
+    ax.set_xticks(np.arange(0, max_x + 1, 5))
+
+    fig.tight_layout()
+
+    if path_png:
+        fig.savefig(path_png, dpi=160, bbox_inches="tight")
+        plt.close(fig)
+        return None
+    return fig, ax
+
+
+# ----------------------------
+# 2) Scatter: Real and model columns vs years
+# ----------------------------
 
 def plot_scatter_models(
     staff: pd.DataFrame,
@@ -179,7 +215,7 @@ def plot_scatter_models(
         pad = 0.06 * (ymax - ymin if ymax > ymin else max(ymax, 1))
         ax.set_ylim(ymin - pad, ymax + pad)
 
-    ax.legend(loc="best")
+    ax.legend(loc="lower right")
     fig.tight_layout()
 
     if path_png:
@@ -254,7 +290,7 @@ def plot_percentiles_bar(
     ax.set_ylabel("Cohort Percentile")
     ax.set_title(title)
     ax.grid(axis="y", alpha=0.2)
-    ax.legend(loc="best")
+    ax.legend(loc="lower right")
 
     fig.tight_layout()
 
@@ -263,3 +299,135 @@ def plot_percentiles_bar(
         plt.close(fig)
         return None
     return fig, ax
+
+
+def plot_scatter_models_interactive(
+    staff: pd.DataFrame,
+    years_col: str,
+    cols_dict: Dict[str, str],
+    path_html: str,
+    title: str = "Salaries vs Years of Experience (interactive)",
+    colors: Optional[Dict[str, str]] = None,
+    hover_cols: Optional[List[str]] = None,
+    marker_size: int = 9,
+    *,
+    summary_info: Optional[dict] = None,   # textbox only; no bands
+):
+    if years_col not in staff.columns:
+        raise ValueError(f"Missing years column: {years_col!r}")
+
+    if hover_cols is None:
+        hover_cols = [c for c in
+                      ["Employee","ID","Seniority","Education Level","Level","Category"]
+                      if c in staff.columns]
+
+    pal = {**_DEFAULT_COLORS, **(colors or {})}
+    fig = go.Figure()
+    x_all = pd.to_numeric(staff[years_col], errors="coerce").to_numpy()
+
+    # --- model scatters only (safe hover text) ---
+    ymins, ymaxs = [], []
+    jitter = np.linspace(-0.15, 0.15, num=max(3, len(cols_dict)))
+
+    for i, (label, col) in enumerate(cols_dict.items()):
+        if col not in staff.columns:
+            continue
+
+        y = pd.to_numeric(staff[col], errors="coerce").to_numpy()
+        m = np.isfinite(x_all) & np.isfinite(y)
+        if not np.any(m):
+            continue
+
+        # Build customdata (for your own reference if you ever need it)
+        hdf = staff.loc[m, hover_cols].copy() if hover_cols else pd.DataFrame(index=staff.index[m])
+        hdf["Years"] = x_all[m]
+        hdf["Salary"] = y[m]
+        cd = hdf.to_numpy()
+
+        # Indices (no negatives!)
+        yrs_idx = len(hover_cols)
+        sal_idx = len(hover_cols) + 1
+
+        # Pre-rendered per-point hover text (HTML)
+        text = []
+        for row in cd:
+            lines = [
+                f"<b>{label}</b>",
+                f"Salary: {row[sal_idx]:,.0f}",
+                f"Years: {row[yrs_idx]:.1f}",
+            ]
+            for k, c in enumerate(hover_cols):
+                lines.append(f"{c}: {row[k]}")
+            text.append("<br>".join(lines))
+
+        fig.add_trace(go.Scatter(
+            x=x_all[m] + (jitter[i] if i < len(jitter) else 0.0),
+            y=y[m],
+            mode="markers",
+            name=label,
+            marker=dict(size=marker_size, color=pal.get(label)),
+            text=text,                                # <- use text
+            hovertemplate="%{text}<extra></extra>",   # <- render text verbatim
+            # customdata=cd,  # keep if you want for future use
+        ))
+
+        ymins.append(np.nanmin(y[m]))
+        ymaxs.append(np.nanmax(y[m]))
+
+    # Layout (no band overlay)
+    fig.update_layout(
+        title=title,
+        xaxis_title="Years of Experience",
+        yaxis_title="Salary ($)",
+        template="plotly_white",
+        legend=dict(bgcolor="rgba(255,255,255,0.8)", bordercolor="rgba(0,0,0,0.2)", borderwidth=1),
+        hovermode="closest",   # <- keep per-point hover crisp
+        hoverlabel=dict(namelength=-1)
+    )
+
+    if ymins and ymaxs:
+        ymin, ymax = float(np.nanmin(ymins)), float(np.nanmax(ymaxs))
+        pad = 0.06 * (ymax - ymin if ymax > ymin else max(ymax, 1))
+        fig.update_yaxes(range=[ymin - pad, ymax + pad])
+
+    if np.isfinite(x_all).any():
+        max_years = max(40, int(np.nanmax(x_all)))
+        fig.update_xaxes(dtick=5, range=[0, max_years])
+
+    # Summary textbox (optional; doesn’t block hover)
+    if summary_info:
+        params = summary_info.get("params", {})
+        models = summary_info.get("models", {})
+        lines = []
+        tgt = params.get("target_percentile")
+        inf = params.get("target_inflation")
+        cola = params.get("cola")
+        if tgt is not None or inf is not None or cola is not None:
+            lines += ["<b>Parameters</b>"]
+            if tgt  is not None: lines.append(f"Target: P{int(round(float(tgt)))}")
+            if inf  is not None: lines.append(f"Inflation: {float(inf)*100:.1f}%")
+            if cola is not None: lines.append(f"COLA floor: {float(cola)*100:.1f}%")
+            lines.append("")
+        if models:
+            lines.append("<b>Models</b>")
+            for label, d in models.items():
+                parts = [f"{label}:"]
+                if "total_cost" in d: parts.append(f"Cost {_fmt_money(float(d['total_cost']))}")
+                if "mean_pct"   in d: parts.append(f"Mean %ile {float(d['mean_pct']):.1f}")
+                if "num_raised" in d: parts.append(f"Raised {int(d['num_raised'])}")
+                lines.append("  " + " | ".join(parts))
+        text = "<br>".join(lines)
+
+        fig.add_annotation(
+            x=0.02, y=0.98, xref="paper", yref="paper",  # upper-left
+            xanchor="left", yanchor="top",
+            align="left", showarrow=False,
+            bgcolor="rgba(255,255,255,0.85)",
+            bordercolor="rgba(0,0,0,0.25)", borderwidth=1,
+            text=text, font=dict(size=12)
+        )
+
+    import os
+    os.makedirs(os.path.dirname(path_html), exist_ok=True)
+    fig.write_html(path_html, include_plotlyjs="cdn", full_html=True)
+    return fig

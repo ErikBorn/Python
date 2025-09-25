@@ -69,18 +69,23 @@ def plan_salary_column(
 # Cost summary vs. real
 # -----------------------------
 
-def plan_costs(staff: pd.DataFrame, real_col: str, planned_col: str) -> Dict[str, float]:
-    """
-    Compute headline costs for a planned salary column vs real salaries.
+# src/planning.py
+import numpy as np
+import pandas as pd
+from typing import Dict
 
-    Returns:
-      {
-        "Total Cost": float,             # sum(max(planned - real, 0))
-        "Avg Cost per Person": float,    # average uplift across all rows
-        "Median Cost per Person": float,
-        "Num Raised": int,               # count of rows with uplift > 0
-        "Headcount": int
-      }
+def plan_costs(
+    staff: pd.DataFrame,
+    real_col: str,
+    planned_col: str,
+    bump: float = 0.02,         # <-- baseline used for "Num Raised"
+    eps: float = 1e-6           # <-- guard for float fuzz
+) -> Dict[str, float]:
+    """
+    Headline costs for a planned salary column vs real salaries.
+
+    'Num Raised' = # of people whose uplift is strictly above the baseline bump:
+                   uplift > (real * bump + eps)
     """
     if real_col not in staff.columns or planned_col not in staff.columns:
         missing = [c for c in (real_col, planned_col) if c not in staff.columns]
@@ -94,17 +99,17 @@ def plan_costs(staff: pd.DataFrame, real_col: str, planned_col: str) -> Dict[str
         return {
             "Total Cost": 0.0,
             "Avg Cost per Person": 0.0,
-            "Median Cost per Person": 0.0,
             "Num Raised": 0,
             "Headcount": 0,
         }
 
-    uplift = np.maximum(planned[m] - real[m], 0.0)
+    uplift   = np.maximum(planned[m] - real[m], 0.0)
+    baseline = real[m] * float(bump)
+
     return {
         "Total Cost": float(np.sum(uplift)),
         "Avg Cost per Person": float(np.mean(uplift)) if uplift.size else 0.0,
-        "Median Cost per Person": float(np.median(uplift)) if uplift.size else 0.0,
-        "Num Raised": int(np.sum(uplift > 0)),
+        "Num Raised": int(np.sum(uplift > (baseline + eps))),  # <-- strict + epsilon
         "Headcount": int(uplift.size),
     }
 
@@ -224,3 +229,77 @@ def cost_to_percentile_keep_above(
 
     result = pd.concat([per_band, pd.DataFrame([totals])], ignore_index=True)
     return result
+
+# --- Money helpers ------------------------------------------------------------
+
+import numpy as np
+import pandas as pd
+
+def _round_to_10(x: float | np.ndarray) -> float | np.ndarray:
+    """Round to nearest $10 (handles scalars or arrays)."""
+    return np.round(np.asarray(x, dtype=float) / 10.0) * 10.0
+
+def format_money_10(x: float) -> str:
+    """Round to nearest $10 and format like $12,340 (string)."""
+    if pd.isna(x):
+        return ""
+    v = _round_to_10(x)
+    return f"${int(v):,}"
+
+
+# --- Comparison row: 'Current +2% (all)' -------------------------------------
+
+def global_bump_costs(staff: pd.DataFrame, real_col: str, bump: float = 0.02) -> dict:
+    """
+    Baseline comparison: everyone gets the same global bump percentage.
+    """
+    real = pd.to_numeric(staff[real_col], errors="coerce").to_numpy(dtype=float)
+    uplift = real * float(bump)
+    total = float(np.nansum(uplift))
+    avg   = float(np.nanmean(uplift))
+    num   = int(np.sum(np.isfinite(uplift)))  # everyone with a salary is 'raised'
+    return {"Total Cost": total, "Avg Cost per Person": avg, "Num Raised": num}
+
+
+# --- Convenience: build a full, formatted costs table ------------------------
+
+def plan_costs_table(
+    staff: pd.DataFrame,
+    real_col: str,
+    planned_cols: list[str],
+    labels: list[str] | None = None,
+    bump_compare: float = 0.02,
+    format_output: bool = True,
+) -> pd.DataFrame:
+    """
+    Build a table of plan costs (+ a 'Current +X%' comparison row).
+      - planned_cols are the columns already created by plan_salary_column
+      - labels are the row names to show (defaults to planned_cols' short names)
+    """
+    from .planning import plan_costs  # self-import is fine inside the same module
+
+    if labels is None:
+        labels = planned_cols
+
+    rows = {}
+    # Each planned column
+    for lab, col in zip(labels, planned_cols):
+        rows[lab] = plan_costs(staff, real_col, col)
+
+    # Comparison row: Current +2% (all)
+    rows[f"Current +{int(round(bump_compare*100))}% (all)"] = global_bump_costs(staff, real_col, bump_compare)
+
+    df = pd.DataFrame.from_dict(rows, orient="index")
+
+    if format_output:
+        # Make a pretty copy with rounding + dollar formatting
+        fmt = df.copy()
+        for c in ["Total Cost", "Avg Cost per Person"]:
+            if c in fmt.columns:
+                fmt[c] = fmt[c].apply(format_money_10)
+        # Num Raised stays integer
+        if "Num Raised" in fmt.columns:
+            fmt["Num Raised"] = fmt["Num Raised"].astype(int)
+        return fmt
+
+    return df

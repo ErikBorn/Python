@@ -5,14 +5,14 @@ paths:
 
 cohort:
   target_percentile: 50
-  target_inflation: 0.00
+  target_inflation: 0.04
 
 nonlinear:
   base_salary: 55000
-  exp_base_per_year: 1550
-  exp_half_life_years: 15
-  sen_base_per_year: 800
-  sen_half_life_years: 15
+  exp_base_per_year: 1600
+  exp_half_life_years: 20
+  sen_base_per_year: 0
+  sen_half_life_years: 0
   ma_pct: 0.04
   phd_pct: 0.08
   stack_degrees: false
@@ -29,6 +29,14 @@ piecewise:
   round_step: 50
   enforce_continuity: true
   shrink_to_total: 1  # or null
+
+consultant:
+  target_percentile: 50        # anchor bands @ P50 (change any time)
+  inflation: 0.04              # +4% inflation on anchors (and base_start)
+  base_start: null             # e.g., 55000  (or leave null to omit the 0-year anchor)
+  deg_ba_pct: -0.04            # BA -4%
+  deg_ma_pct: 0.00             # MA  0%
+  deg_phd_pct: 0.04            # PhD +4%
 
 planning:
   bump: 0.02
