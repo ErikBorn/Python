@@ -115,7 +115,7 @@ def main(cfg):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", "-c", default="config.yaml")
+    ap.add_argument("--config", "-c", default="SalaryAnalysis/scripts/config.yaml")
     args = ap.parse_args()
     with open(args.config, "r") as f:
         cfg = yaml.safe_load(f)
