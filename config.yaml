@@ -1,7 +1,7 @@
 paths:
-  cohort_csv: data/cohort.csv
-  staff_csv:  data/staff.csv
-  out_dir:    outputs
+  cohort_csv: SalaryAnalysis/data/cohort.csv
+  staff_csv:  SalaryAnalysis/data/staff.csv
+  out_dir:    SalaryAnalysis/outputs
 
 cohort:
   target_percentile: 50
@@ -28,7 +28,7 @@ piecewise:
   round_base: 100
   round_step: 50
   enforce_continuity: true
-  shrink_to_total: "Model NL Salary"  # or null
+  shrink_to_total: 1  # or null
 
 planning:
   bump: 0.02

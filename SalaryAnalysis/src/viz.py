@@ -19,19 +19,8 @@ def plot_bands(
     plus_minus_pct: float,
     path_png: Optional[str] = None,
     title_suffix: str = "Cohort",
+    max_years_override: Optional[int] = None,   # NEW: allow manual cap
 ):
-    """
-    Draw horizontal band segments (5-year CLOSED bands) at a chosen cohort percentile.
-      - Solid line: target band salary
-      - Thin dashed lines: ±(plus_minus_pct)
-
-    Args:
-        long: tidy cohort df with columns ['experience_band','percentile','salary']
-        target_percentile: e.g., 50 (median), 60, 75, etc.
-        plus_minus_pct: fraction, e.g., 0.10 for ±10%
-        path_png: if provided, save figure to this path
-        title_suffix: string appended to title
-    """
     bins, bands_order = build_band_bins_closed(long)
 
     # Compute per-band target salaries
@@ -40,29 +29,48 @@ def plot_bands(
         y = interpolate_salary_strict(long, label, float(target_percentile))
         if np.isnan(y):
             continue
-        segs.append((start, end, label, float(y)))
+        segs.append((float(start), float(end), str(label), float(y)))
 
     if not segs:
         raise RuntimeError("No bands to plot (check `long` and target_percentile).")
 
-    # Determine plot bounds
-    max_x = int(
-        np.nanmax([np.inf if not np.isfinite(e) else e for _, e, _, _ in segs if e is not None] + [40])
-    )
-    min_y = float(np.nanmin([s for *_, s in segs]))
-    max_y = float(np.nanmax([s for *_, s in segs]))
+    # ---- Safe bounds (avoid inf) ----
+    # Finite ends (e.g., 5, 10, ..., 40)
+    finite_ends = [e for _, e, _, _ in segs if np.isfinite(e)]
+    if finite_ends:
+        finite_cap = max(finite_ends)
+    else:
+        finite_cap = 0.0
+
+    # If there’s an open-ended band, draw it as 5-year width from its start
+    open_band_draw_caps = [
+        s + 5.0 for s, e, _, _ in segs if not np.isfinite(e)
+    ]
+
+    # Choose the max x from finite ends, open-band draw caps, and a floor of 40
+    computed_max_x = max([40.0, finite_cap] + open_band_draw_caps)  # all finite
+    max_x = int(max_years_override if max_years_override is not None else computed_max_x)
+
+    # Y bounds
+    vals = [v for *_, v in segs]
+    min_y = float(np.nanmin(vals))
+    max_y = float(np.nanmax(vals))
     y_pad = 0.08 * (max_y - min_y if max_y > min_y else max_y)
 
+    # ---- Plot ----
     fig, ax = plt.subplots(figsize=(12, 6))
 
     for start, end, label, val in segs:
-        x0, x1 = start, (end if np.isfinite(end) else start + 5)  # draw 5y wide for open-ended
+        x0 = start
+        x1 = end if np.isfinite(end) else (start + 5.0)  # draw open band as 5-year segment
         ax.hlines(val, x0, x1, linewidth=4, color="C0")
+
         y_lo = val * (1 - plus_minus_pct)
         y_hi = val * (1 + plus_minus_pct)
         ax.hlines(y_lo, x0, x1, linewidth=1.5, linestyles="dashed", color="C0")
         ax.hlines(y_hi, x0, x1, linewidth=1.5, linestyles="dashed", color="C0")
         ax.vlines([x0, x1], ymin=y_lo, ymax=y_hi, colors="gray", linewidth=0.6, alpha=0.35)
+
         mid_x = (x0 + x1) / 2.0
         ax.text(mid_x, val, label, ha="center", va="bottom", fontsize=9)
 
@@ -78,7 +86,6 @@ def plot_bands(
     ax.set_xticks(np.arange(0, max_x + 1, 5))
 
     fig.tight_layout()
-
     if path_png:
         fig.savefig(path_png, dpi=160, bbox_inches="tight")
         plt.close(fig)

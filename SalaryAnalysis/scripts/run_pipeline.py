@@ -4,6 +4,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import argparse, os, yaml, pandas as pd
+import numpy as np
 from src.io import load_staff, load_cohort, write_csv
 from src.clean import standardize_columns
 from src.cohort import build_band_bins_closed, interpolate_salary_strict
@@ -13,6 +14,35 @@ from src.models.piecewise import derive_pw_bands_ols, pw_predict
 from src.metrics import achieved_percentiles, band_medians_table
 from src.planning import plan_salary_column, plan_costs
 from src.viz import plot_bands, plot_scatter_models
+
+def make_nl_baseline_fn(nl_params: dict):
+    """
+    Returns f(T): BA baseline from the nonlinear model evaluated at total-years T.
+    Degree multipliers neutralized; seniority=0 so Years of Exp == T.
+    """
+    p = dict(nl_params)
+    p.update({
+        "ma_pct": 0.0,
+        "phd_pct": 0.0,
+        "stack_degrees": False,
+        "f_non_sen": None,   # use years directly
+    })
+
+    def f(t):
+        t = np.asarray(t, dtype=float)
+        n = t.size
+        tmp = pd.DataFrame({
+            "Years of Exp":      t,
+            "Seniority":         np.zeros(n),
+            "Education Level":   [""] * n,
+            "Skill Rating":      np.zeros(n),
+            "Prep Rating":       np.zeros(n),
+            "Knowledge Rating":  np.zeros(n),
+            "Level":             [""] * n,
+        })
+        return nonlinear_predict(tmp, **p).to_numpy()
+
+    return f
 
 def main(cfg):
     paths = cfg["paths"]; out = paths["out_dir"]; os.makedirs(out, exist_ok=True)
@@ -33,24 +63,16 @@ def main(cfg):
     # 4) Piecewise from NLM baseline (OLS)
     # Build BA baseline callable over Total Years
     T = total_years(staff["Years of Exp"], staff["Seniority"], nl["f_non_sen"])
-    # quick callable: use staff grid to fit; for better fidelity, supply your own function
-    import numpy as np
-    def nl_baseline_fn(t):
-        # predict NLM with BA-only multiplier (ma_pct=phd_pct=0) via scaling:
-        tmp = staff.copy()
-        tmp["Years of Exp"] = t if isinstance(t, np.ndarray) else np.asarray(t)
-        return nonlinear_predict(
-            tmp, **{**nl, "ma_pct":0.0, "phd_pct":0.0}
-        )
 
     pw_cfg = cfg["piecewise"]
+    nl_baseline_fn = make_nl_baseline_fn(nl)
     pw_bands = derive_pw_bands_ols(
         nl_baseline_fn,
-        edges=pw_cfg["edges"],
-        round_base=pw_cfg["round_base"],
-        round_step=pw_cfg["round_step"],
-        enforce_continuity=pw_cfg["enforce_continuity"],
-        shrink_to_total=None if pw_cfg["shrink_to_total"] in (None, "null") else pw_cfg["shrink_to_total"]
+        edges=cfg["piecewise"]["edges"],
+        round_base=cfg["piecewise"]["round_base"],
+        round_step=cfg["piecewise"]["round_step"],
+        enforce_continuity=True,
+        shrink_to_total=cfg["piecewise"].get("shrink_to_total")
     )
     # predict PW with degree multipliers
     staff["PW"] = pw_predict(
