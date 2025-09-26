@@ -3,8 +3,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import argparse, os, yaml, pandas as pd
+import argparse
+import os
+import yaml
+import pandas as pd
 import numpy as np
+
 from src.io import load_staff, load_cohort, write_csv
 from src.clean import standardize_columns
 from src.cohort import build_band_bins_closed, interpolate_salary_strict
@@ -13,11 +17,10 @@ from src.models.nonlinear import nonlinear_predict, total_years
 from src.models.piecewise import derive_pw_bands_ols, pw_predict
 from src.metrics import achieved_percentiles, band_medians_table, per_band_median_percentiles
 from src.planning import plan_salary_column, plan_costs
-from src.viz import plot_bands, plot_scatter_models
-from src.models.consultant import consultant_predict
-from src.viz import plot_scatter_models_interactive
-from src.policies import apply_outside_exp_cap
+from src.viz import cons_cap_overview_html, plot_bands, plot_scatter_models, plot_scatter_models_interactive
 from src.models.consultant import consultant_predict, consultant_predict_capped
+from src.policies import apply_outside_exp_cap
+from src.share import write_cohort_aligned_calculator_html  
 
 def make_nl_baseline_fn(nl_params: dict):
     """
@@ -110,34 +113,53 @@ def main(cfg):
         tol=tol
     )
     # 4b) Consultant model
-    cns = cfg["consultant"]
-    cns_cap_cfg = cfg["consultant_capped"]
+    # cns = cfg["consultant"]
+    # cns_cap_cfg = cfg["consultant_capped"]
     prep_series_name = cfg.get("prep", {}).get("flag_col", "Prep")
     prep_bonus = cfg.get("prep", {}).get("bonus", 2500.0)
 
+    # --- Consultant model (positive-only bumps + pre-downshift) ---
+    cns = cfg["consultant"]
     staff["CONS Salary"] = consultant_predict(
         staff, long,
-        target_percentile=cns["target_percentile"],
-        inflation=cns["inflation"],
-        base_start=cns.get("base_start"),
-        deg_ba_pct=cns["deg_ba_pct"],
-        deg_ma_pct=cns["deg_ma_pct"],
-        deg_phd_pct=cns["deg_phd_pct"],
-        prep_col=prep_series_name,
-        prep_bonus=prep_bonus,
+        target_percentile = cns["target_percentile"],
+        inflation         = cns["inflation"],
+        base_start        = cns.get("base_start"),
+        # positive-only bumps
+        deg_ma_pct        = cns.get("deg_ma_pct", 0.02),
+        deg_phd_pct       = cns.get("deg_phd_pct", 0.04),
+        # NEW: aim the base curve down before degree bumps
+        pre_degree_down_pct = cns.get("pre_degree_down_pct", 0.03),
+        auto_downshift      = cns.get("auto_downshift", False),
+        # flat bonus
+        prep_col          = prep_series_name,
+        prep_bonus        = prep_bonus,
     )
 
+    # --- Capped consultant model ---
+    cns_cap_cfg = cfg.get("consultant_capped", {})
     staff["CONS_CAP Salary"] = consultant_predict_capped(
         staff, long,
-        target_percentile=cns_cap_cfg.get("target_percentile", cns["target_percentile"]),
-        inflation=cns_cap_cfg.get("inflation", cns["inflation"]),
-        base_start=cns_cap_cfg.get("base_start", cns.get("base_start")),
-        deg_ba_pct=cns_cap_cfg.get("deg_ba_pct", cns["deg_ba_pct"]),
-        deg_ma_pct=cns_cap_cfg.get("deg_ma_pct", cns["deg_ma_pct"]),
-        deg_phd_pct=cns_cap_cfg.get("deg_phd_pct", cns["deg_phd_pct"]),
-        max_salary=cns_cap_cfg.get("max_salary", 100_000),
-        prep_col=prep_series_name,
-        prep_bonus=prep_bonus,
+        target_percentile   = cns_cap_cfg.get("target_percentile", cns["target_percentile"]),
+        inflation           = cns_cap_cfg.get("inflation", cns["inflation"]),
+        base_start          = cns_cap_cfg.get("base_start", cns.get("base_start")),
+        deg_ma_pct          = cns_cap_cfg.get("deg_ma_pct", cns.get("deg_ma_pct", 0.02)),
+        deg_phd_pct         = cns_cap_cfg.get("deg_phd_pct", cns.get("deg_phd_pct", 0.04)),
+        pre_degree_down_pct = cns_cap_cfg.get("pre_degree_down_pct", cns.get("pre_degree_down_pct", 0.03)),
+        auto_downshift      = cns_cap_cfg.get("auto_downshift", cns.get("auto_downshift", False)),
+        max_salary          = cns_cap_cfg.get("max_salary", 100_000),
+        prep_col            = prep_series_name,
+        prep_bonus          = prep_bonus,
+    )
+
+    # Realized (raise-to-model-or-2% floor) version of capped consultant model
+    staff["CONS_Cap_Real"] = plan_salary_column(
+        staff,
+        real_col="25-26 Salary",
+        model_col="CONS_CAP Salary",
+        out_col="CONS_Cap_Real",
+        bump=cfg["planning"]["bump"],   # your COLA floor, e.g. 0.02
+        tol=cfg["planning"]["tol"]      # your tolerance (e.g. 0.02)
     )
 
     # 5) Plans & costs (raise-to-model-or-2% bump)
@@ -197,10 +219,13 @@ def main(cfg):
         staff,
         cols_dict={
             "Real": "25-26 Salary",
-            "RPB":  "RPB Salary",
-            "NLM":  "Model NL Salary",
-            "PW":   "PW",
-            "CONS":"CONS Salary",
+            # "RPB":  "RPB Salary",
+            # "NLM":  "Model NL Salary",
+            # # "PW":   "PW",
+            # "CONS":"CONS Salary",
+            # "CONS_CAP":"CONS_CAP Salary",
+            "CONS_Cap_Real":"CONS_Cap_Real",
+            "COLA 2%":"All +2% Plan Salary",
             # "PWR":  "PWR Plan Salary",   # include if you’ve computed PWR
         },
         years_col="Years of Exp",
@@ -224,10 +249,10 @@ def main(cfg):
     pct_plans = achieved_percentiles(
         long, staff,
         salary_cols=[
-            "RPB Plan Salary", "NLM Plan Salary", "PW Plan Salary", "CONS Plan Salary"
+            "RPB Plan Salary", "NLM Plan Salary", "PW Plan Salary", "CONS Plan Salary", "CONS_CAP Plan Salary"
         ],
         years_col="Years of Exp",
-        labels=["RPB", "NLM", "PW", "CONS"]   # match to models for easier merge
+        labels=["RPB", "NLM", "PW", "CONS", "CONS_Cap"]   # match to models for easier merge
     ).round(1)
 
     # --- Reshape ---
@@ -303,9 +328,10 @@ def main(cfg):
         # "RPB": "RPB Salary",
         # "NLM": "Model NL Salary",
         # "PW": "PW",
-        "PWR": "PWR Salary",   # cyan
+        # "PWR": "PWR Salary",   # cyan
         # "CONS":"CONS Salary",
-        "CONS_CAP": "CONS_CAP Salary",
+        # "CONS_CAP": "CONS_CAP Salary",
+        "CONS_Cap_Real": "CONS_Cap_Real",   # NEW
     }
 
     plot_bands(
@@ -322,9 +348,11 @@ def main(cfg):
         "Real": "25-26 Salary",
         # "RPB": "RPB Salary",
         # "NLM": "Model NL Salary",
-        "PW": "PW",
+        # "PW": "PW",
         # "CONS":"CONS Salary",
-        "CONS_CAP": "CONS_CAP Salary",
+        # "CONS_CAP": "CONS_CAP Salary",
+        "CONS_Cap_Real": "CONS_Cap_Real",   # NEW
+        # "COLA 2%": "All +2% Plan Salary",
         # "PWR": "PWR Salary",   # cyan
     }
 
@@ -362,24 +390,27 @@ def main(cfg):
             "cola":              cfg["planning"]["bump"],
         },
         "models": {
-            "PW":  _model_summary("PW",  "PW Plan Salary"),
-            "NLM": _model_summary("NLM", "NLM Plan Salary"),
-            "RPB": _model_summary("RPB", "RPB Plan Salary"),
+            # "PW":  _model_summary("PW",  "PW Plan Salary"),
+            # "NLM": _model_summary("NLM", "NLM Plan Salary"),
+            # "RPB": _model_summary("RPB", "RPB Plan Salary"),
             # include consultant / PWR variants if you want:
             "CONS": _model_summary("CONS", "CONS Plan Salary"),
             "CONS_CAP": _model_summary("CONS_CAP", "CONS_CAP Plan Salary"),
+            "COLA 2%": _model_summary("COLA 2%", "All +2% Plan Salary"),
         }
     }
 
-    # What to show as points
+    # What to show as points on the interactive scatter
     cols_dict = {
         "Real": "25-26 Salary",
-        "RPB":  "RPB Salary",
-        "NLM":  "Model NL Salary",
-        "PW":   "PW",
+        # "RPB":  "RPB Salary",
+        # "NLM":  "Model NL Salary",
+        # "PW":   "PW",
         "CONS": "CONS Salary",
         "CONS_CAP": "CONS_CAP Salary",
-        "PWR":  "PW Plan Salary",   # optional to show the plan outcome as a series
+        "CONS_Cap_Real": "CONS_Cap_Real",   # NEW
+        "COLA 2%": "All +2% Plan Salary",
+        # "PWR":  "PW Plan Salary",   # optional to show the plan outcome as a series
     }
 
     # Export interactive HTML with bands + summary box
@@ -390,10 +421,30 @@ def main(cfg):
         path_html=f"{out}/figures/scatter_models_interactive.html",
         hover_cols=["Employee","ID","Seniority","Education Level","Level","Category"],
         marker_size=9,
-        # long=long,
-        # target_percentile=cfg["cohort"]["target_percentile"],
-        # plus_minus_pct=cfg["plots"]["plus_minus_pct"],
+        long=long,
+        target_percentile=cfg["cohort"]["target_percentile"],
+        inflation=0.02,
+        plus_minus_pct=cfg["plots"]["plus_minus_pct"],
         summary_info=summary_info
+    )
+
+    cns_cap = cfg.get("consultant_capped", {})
+    cons_cap_overview_html(
+        long,
+        target_percentile = cns_cap.get("target_percentile", cfg["consultant"]["target_percentile"]),
+        inflation         = cns_cap.get("inflation", cfg["consultant"]["inflation"]),
+        deg_ma_pct        = cns_cap.get("deg_ma_pct", cfg["consultant"].get("deg_ma_pct", 0.02)),
+        deg_phd_pct       = cns_cap.get("deg_phd_pct", cfg["consultant"].get("deg_phd_pct", 0.04)),
+        prep_bonus        = cfg["planning"].get("prep_bonus", 2500.0),
+        max_salary        = cns_cap.get("max_salary", 100_000),
+        cola_floor        = cfg["planning"]["bump"],
+        outside_cap_years = cfg.get("years_policy", {}).get("outside_cap_years", 10),
+        skill_extra_years = cfg.get("years_policy", {}).get("skill_extra_years", 5),
+        skill_col_name    = cfg.get("years_policy", {}).get("skill_col_name", "Skill"),
+        base_start        = cfg["consultant"].get("base_start"),
+        path_html         = f"{cfg['paths']['out_dir']}/figures/cons_cap_overview.html",
+        # optional: pick your own example person
+        example = dict(years=18.0, seniority=3.0, degree="MA", prep=1, skill=0, current=70_000),
     )
 
     # 8) Save staff w/ predictions
@@ -405,14 +456,14 @@ def main(cfg):
 
     # 2) Desired order for the calculated/model columns
     calc_cols_desired = [
-            "RPB Salary",
-            "Model NL Salary",
-            "PW",
+            # "RPB Salary",
+            # "Model NL Salary",
+            # "PW",
             "CONS Salary",
             "CONS_CAP Salary",      # NEW
-            "PW Plan Salary",
-            "NLM Plan Salary",
-            "RPB Plan Salary",
+            # "PW Plan Salary",
+            # "NLM Plan Salary",
+            # "RPB Plan Salary",
             "CONS Plan Salary",
             "CONS_CAP Plan Salary", # NEW
             "All +2% Plan Salary",
@@ -443,6 +494,23 @@ def main(cfg):
     # 4) Reindex and save
     staff = staff.reindex(columns=final_cols)
     staff.to_csv(f"{out}/tables/staff_with_models.csv", index=False)
+
+    # 9) Write Consultant Cap calculator HTML
+    calc_path = f"{out}/figures/cons_cap_calculator.html"
+    write_cohort_aligned_calculator_html(
+        long,
+        target_percentile=cfg["consultant"]["target_percentile"],
+        inflation=cfg["consultant"]["inflation"],
+        pre_degree_down_pct=cfg["consultant"].get("pre_degree_down_pct", 0.03),
+        deg_ma_pct=cfg["consultant"]["deg_ma_pct"],
+        deg_phd_pct=cfg["consultant"]["deg_phd_pct"],
+        prep_bonus=cfg["consultant"].get("prep_bonus", 2500.0),
+        max_salary=cfg.get("consultant_capped", {}).get("max_salary", 100_000),
+        cola_floor=cfg["planning"]["bump"],
+        outside_cap_years=cfg["experience_policy"]["cap_outside_years"],
+        skill_extra_years=cfg["experience_policy"]["extra_years_per_skill"],
+        path_html=calc_path,
+    )
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()

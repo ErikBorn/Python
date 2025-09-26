@@ -3,6 +3,6 @@ If a person has a "skill endorsement" allow them to have up to five more years
 
 Use AP to add $2500
 
-Change the degree rule
+Change the degree rule...?
 
 Add a two-step piecewise with the CONS line and a zero slope after 30 years

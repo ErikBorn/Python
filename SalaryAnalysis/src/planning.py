@@ -69,23 +69,22 @@ def plan_salary_column(
 # Cost summary vs. real
 # -----------------------------
 
-# src/planning.py
-import numpy as np
-import pandas as pd
-from typing import Dict
-
 def plan_costs(
     staff: pd.DataFrame,
     real_col: str,
     planned_col: str,
-    bump: float = 0.02,         # <-- baseline used for "Num Raised"
-    eps: float = 1e-6           # <-- guard for float fuzz
+    bump: float = 0.02,
 ) -> Dict[str, float]:
     """
-    Headline costs for a planned salary column vs real salaries.
+    Compute headline costs for a planned salary column vs real salaries.
 
-    'Num Raised' = # of people whose uplift is strictly above the baseline bump:
-                   uplift > (real * bump + eps)
+    Returns:
+      {
+        "Total Cost": float,             # sum(max(planned - real, 0))
+        "Avg Cost per Person": float,    # average uplift across all rows
+        "Num Raised": int,               # count of rows with uplift > baseline bump
+        "Headcount": int
+      }
     """
     if real_col not in staff.columns or planned_col not in staff.columns:
         missing = [c for c in (real_col, planned_col) if c not in staff.columns]
@@ -103,13 +102,13 @@ def plan_costs(
             "Headcount": 0,
         }
 
-    uplift   = np.maximum(planned[m] - real[m], 0.0)
-    baseline = real[m] * float(bump)
+    uplift = np.maximum(planned[m] - real[m], 0.0)
+    baseline = real[m] * bump
 
     return {
         "Total Cost": float(np.sum(uplift)),
         "Avg Cost per Person": float(np.mean(uplift)) if uplift.size else 0.0,
-        "Num Raised": int(np.sum(uplift > (baseline + eps))),  # <-- strict + epsilon
+        "Num Raised": int(np.sum(uplift > baseline)),  # <-- only above baseline
         "Headcount": int(uplift.size),
     }
 

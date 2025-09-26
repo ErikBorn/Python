@@ -1,18 +1,27 @@
 # src/viz.py
 
 from __future__ import annotations
-from typing import Dict, List, Iterable, Optional
-from .cohort import build_band_bins_closed, band_range_closed, interpolate_salary_strict
-
+from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+import textwrap
+
+from .cohort import build_band_bins_closed, interpolate_salary_strict
+from src.models.consultant import consultant_predict_capped
 
 # --- add near the top of src/viz.py ---
 def _fmt_money(x: float) -> str:
     try:
         return f"${x:,.0f}"
+    except Exception:
+        return ""
+
+def _money_100(x: float) -> str:
+    # nearest $100, no decimals
+    try:
+        return f"${int(round(float(x)/100.0)*100):,}"
     except Exception:
         return ""
 
@@ -29,8 +38,18 @@ _DEFAULT_COLORS = {
     "PW":   "#9467bd",
     "PWR":  "#17becf",
     "CONS": "#8c564b",
-    "CONS_CAP": "#e377c2",   # NEW: magenta/pink
+    "CONS_CAP": "#9467bd",   # NEW: magenta/pink
+    "CONS_Cap_Real": "#e377c2",   # NEW
 }
+
+def _wrap_html(text: str, width: int = 150) -> str:
+    """
+    Insert <br> line breaks so Plotly annotation text wraps.
+    Respects existing <br> by wrapping each line separately.
+    """
+    lines = text.split("<br>")
+    wrapped = ["<br>".join(textwrap.fill(l, width=width).splitlines()) for l in lines]
+    return "<br>".join(wrapped)
 
 def plot_bands(
     long: pd.DataFrame,
@@ -310,7 +329,13 @@ def plot_scatter_models_interactive(
     hover_cols: Optional[List[str]] = None,
     marker_size: int = 9,
     *,
-    summary_info: Optional[dict] = None,   # textbox only; no bands
+    # NEW: optional cohort bands overlay
+    long: Optional[pd.DataFrame] = None,
+    target_percentile: Optional[float] = None,
+    plus_minus_pct: float = 0.10,
+    inflation: float = 0.0,               # set if your targets should be inflated
+    band_color: str = "rgba(44,160,44,0.85)",  # Plotly dark green
+    summary_info: Optional[dict] = None,  # textbox
 ):
     if years_col not in staff.columns:
         raise ValueError(f"Missing years column: {years_col!r}")
@@ -324,30 +349,26 @@ def plot_scatter_models_interactive(
     fig = go.Figure()
     x_all = pd.to_numeric(staff[years_col], errors="coerce").to_numpy()
 
-    # --- model scatters only (safe hover text) ---
+    # --- model scatters (unchanged) ---
     ymins, ymaxs = [], []
     jitter = np.linspace(-0.15, 0.15, num=max(3, len(cols_dict)))
 
     for i, (label, col) in enumerate(cols_dict.items()):
         if col not in staff.columns:
             continue
-
         y = pd.to_numeric(staff[col], errors="coerce").to_numpy()
         m = np.isfinite(x_all) & np.isfinite(y)
         if not np.any(m):
             continue
 
-        # Build customdata (for your own reference if you ever need it)
         hdf = staff.loc[m, hover_cols].copy() if hover_cols else pd.DataFrame(index=staff.index[m])
         hdf["Years"] = x_all[m]
         hdf["Salary"] = y[m]
         cd = hdf.to_numpy()
 
-        # Indices (no negatives!)
         yrs_idx = len(hover_cols)
         sal_idx = len(hover_cols) + 1
 
-        # Pre-rendered per-point hover text (HTML)
         text = []
         for row in cd:
             lines = [
@@ -365,23 +386,72 @@ def plot_scatter_models_interactive(
             mode="markers",
             name=label,
             marker=dict(size=marker_size, color=pal.get(label)),
-            text=text,                                # <- use text
-            hovertemplate="%{text}<extra></extra>",   # <- render text verbatim
-            # customdata=cd,  # keep if you want for future use
+            text=text,
+            hovertemplate="%{text}<extra></extra>",
         ))
+        ymins.append(np.nanmin(y[m])); ymaxs.append(np.nanmax(y[m]))
 
-        ymins.append(np.nanmin(y[m]))
-        ymaxs.append(np.nanmax(y[m]))
+    # --- determine x-range (use staff; add bands later) ---
+    if np.isfinite(x_all).any():
+        staff_max_years = max(40, int(np.nanmax(x_all)))
+    else:
+        staff_max_years = 40
 
-    # Layout (no band overlay)
+    x_right = staff_max_years  # may increase once we inspect bands
+
+    # --- optional flat band overlay ---
+    if long is not None and target_percentile is not None:
+        from .cohort import build_band_bins_closed, interpolate_salary_strict
+        bins, _ = build_band_bins_closed(long)
+
+        finite_bins = [(s, e, lab) for (s, e, lab) in bins if np.isfinite(e)]
+        
+    first_drawn = True
+    for start, end, label in finite_bins:
+        x0 = float(start)
+        x1 = float(end)
+
+        y = interpolate_salary_strict(long, label, float(target_percentile))
+        if pd.isna(y):
+            continue
+        y = float(y) * (1.0 + float(inflation))
+        y_lo = y * (1.0 - plus_minus_pct)
+        y_hi = y * (1.0 + plus_minus_pct)
+
+        # solid target line
+        fig.add_trace(go.Scatter(
+            x=[x0, x1], y=[y, y],
+            mode="lines",
+            line=dict(width=3, color=band_color),
+            name=f"{label} @ P{int(round(target_percentile))}",
+            legendgroup="bands",
+            showlegend=first_drawn,     # only once
+            hoverinfo="skip",
+        ))
+        # dashed ± lines
+        for yd in (y_lo, y_hi):
+            fig.add_trace(go.Scatter(
+                x=[x0, x1], y=[yd, yd],
+                mode="lines",
+                line=dict(width=1.5, color=band_color, dash="dash"),
+                name="± band",
+                legendgroup="bands",
+                showlegend=False,
+                hoverinfo="skip",
+            ))
+
+        first_drawn = False
+
+    # --- layout / axes ---
     fig.update_layout(
         title=title,
         xaxis_title="Years of Experience",
         yaxis_title="Salary ($)",
         template="plotly_white",
-        legend=dict(bgcolor="rgba(255,255,255,0.8)", bordercolor="rgba(0,0,0,0.2)", borderwidth=1),
-        hovermode="closest",   # <- keep per-point hover crisp
-        hoverlabel=dict(namelength=-1)
+        legend=dict(bgcolor="rgba(255,255,255,0.8)",
+                    bordercolor="rgba(0,0,0,0.2)", borderwidth=1),
+        hovermode="closest",
+        hoverlabel=dict(namelength=-1),
     )
 
     if ymins and ymaxs:
@@ -389,11 +459,9 @@ def plot_scatter_models_interactive(
         pad = 0.06 * (ymax - ymin if ymax > ymin else max(ymax, 1))
         fig.update_yaxes(range=[ymin - pad, ymax + pad])
 
-    if np.isfinite(x_all).any():
-        max_years = max(40, int(np.nanmax(x_all)))
-        fig.update_xaxes(dtick=5, range=[0, max_years])
+    fig.update_xaxes(dtick=5, range=[0, x_right + 1])  # +1 year headroom
 
-    # Summary textbox (optional; doesn’t block hover)
+    # --- optional summary box (unchanged) ---
     if summary_info:
         params = summary_info.get("params", {})
         models = summary_info.get("models", {})
@@ -418,7 +486,7 @@ def plot_scatter_models_interactive(
         text = "<br>".join(lines)
 
         fig.add_annotation(
-            x=0.02, y=0.98, xref="paper", yref="paper",  # upper-left
+            x=0.02, y=0.98, xref="paper", yref="paper",
             xanchor="left", yanchor="top",
             align="left", showarrow=False,
             bgcolor="rgba(255,255,255,0.85)",
@@ -426,6 +494,283 @@ def plot_scatter_models_interactive(
             text=text, font=dict(size=12)
         )
 
+    import os
+    os.makedirs(os.path.dirname(path_html), exist_ok=True)
+    fig.write_html(path_html, include_plotlyjs="cdn", full_html=True)
+    return fig
+
+def cons_cap_overview_html(
+    long: pd.DataFrame,
+    *,
+    # policy / model knobs
+    target_percentile: float = 50.0,
+    inflation: float = 0.04,
+    deg_ma_pct: float = 0.02,
+    deg_phd_pct: float = 0.04,
+    prep_bonus: float = 2500.0,
+    max_salary: float = 100_000.0,
+    cola_floor: float = 0.02,
+    # years policy
+    outside_cap_years: int = 10,
+    skill_extra_years: int = 5,      # additional credit if Skill==1
+    skill_col_name: str = "Skill",   # your 0/1 skill flag column
+    # example person (optional; if None, a default is used)
+    example: Optional[Dict] = None,  # dict with years, seniority, degree, prep, skill
+    # where to write
+    path_html: str = "outputs/figures/cons_cap_overview.html",
+    # optional 0-year anchor for consultant method (if you use it)
+    base_start: float | None = None,
+    pre_degree_down_pct: float = 0.03,
+    auto_downshift: bool = False,   # if you compute k from mix elsewhere, keep False here
+):
+    """
+    Render a concise HTML explainer for the Consultant (capped) plan, with:
+      • policy text (years logic, model logic, raise rule)
+      • cohort target table (inflation-adjusted, rounded, CAPPED)
+      • worked example using cohort data
+    """
+    # ---------------- 1) Cohort table (inflation-adjusted & stop at cap) ----------------
+    def _to_plus_label(start: float) -> str:
+        return f"{int(round(start))}+ yrs"
+
+    rows: list[tuple[str, float]] = []
+    bins, _ = build_band_bins_closed(long)
+
+    cap = float(max_salary)
+    hit_cap = False
+
+    for start, end, label in bins:
+        s = interpolate_salary_strict(long, label, float(target_percentile))
+        if np.isnan(s):
+            continue
+        v = float(s) * (1.0 + float(inflation))  # inflation-adjusted
+
+        if v >= cap and not hit_cap:
+            # first time we hit the cap: collapse this and all later bands into one "start+ yrs" row
+            rows.append((_to_plus_label(start), cap))
+            hit_cap = True
+            break
+        elif not hit_cap:
+            rows.append((label, v))
+        else:
+            break
+
+    col_hdr = f"P{int(round(target_percentile))} target (+{inflation*100:.0f}%)"
+    coh = pd.DataFrame(rows, columns=["Experience Band", col_hdr])
+    coh[col_hdr] = coh[col_hdr].apply(_money_100)  # nearest $100 for display
+
+    # --- compute the same baseline factor the model uses ---
+    if auto_downshift:
+        # If you want an auto mix-based factor here, pass it in or compute consistently.
+        # For now keep it fixed, same as your model default:
+        k = max(0.0, 1.0 - float(pre_degree_down_pct))
+    else:
+        k = max(0.0, 1.0 - float(pre_degree_down_pct))
+
+    rows = []
+    bins, _ = build_band_bins_closed(long)
+
+    def _to_plus_label(start: float) -> str:
+        return f"{int(round(start))}+ yrs"
+
+    cap = float(max_salary)
+    hit_cap = False
+
+    for start, end, label in bins:
+        s = interpolate_salary_strict(long, label, float(target_percentile))
+        if np.isnan(s):
+            continue
+
+        # raw cohort target -> inflate -> apply model baseline downshift
+        v = float(s) * (1.0 + float(inflation))
+        v = v * k
+
+        # cap & collapse when we first hit the cap
+        if v >= cap and not hit_cap:
+            label = _to_plus_label(start)
+            v = cap
+            rows.append((label, v))
+            hit_cap = True
+            break
+        elif not hit_cap:
+            rows.append((label, v))
+        else:
+            break
+
+    # make a clear header that these are model-adjusted targets
+    # adj_txt = f" (−{pre_degree_down_pct*100:.0f}% baseline adj)" if pre_degree_down_pct else ""
+    col_hdr = f"P{int(round(target_percentile))} model baseline (+{inflation*100:.0f}%)"#{adj_txt}"
+
+    coh = pd.DataFrame(rows, columns=["Experience Band", col_hdr])
+    coh[col_hdr] = coh[col_hdr].apply(_money_100)
+
+    table = go.Table(
+        header=dict(
+            values=["Experience Band", col_hdr],
+            fill_color="#f2f2f2",
+            align="left",
+            font=dict(size=12, color="#333"),
+            height=28,
+        ),
+        cells=dict(
+            values=[coh["Experience Band"], coh[col_hdr]],
+            align="left",
+            height=26,
+        ),
+        # bottom, nearly full width
+        domain=dict(x=[0.06, 0.94], y=[0.05, 0.35]),
+    )
+
+    # ---------------- 2) Policy text blocks (wrapped, friendly language) ---------------
+    years_text = (
+        "<b>How we count experience</b><br>"
+        "We start with each person’s total years in the profession, then subtract the time they’ve already "
+        "worked in our district. We give credit for up to "
+        f"<b>{outside_cap_years}</b> years of outside experience. If someone has a recognized skill endorsement, "
+        f"we’ll allow up to <b>{outside_cap_years + skill_extra_years}</b> years. We then add their St. Mary's Academy "
+        "seniority. This adjusted total is the ‘credited years’ we use for salaries."
+    )
+
+    cons_text = (
+        "<b>How the cohort-aligned salary is set</b><br>"
+        "We look at peer schools and set target salaries for each experience band, adjust those targets for inflation, "
+        "and connect them to make a smooth salary curve. Advanced degrees add to the base: "
+        f"<b>MA +{deg_ma_pct*100:.0f}%</b>, <b>PhD +{deg_phd_pct*100:.0f}%</b> (BA does not change the base). "
+        f"If someone teaches an AP/Prep course, they get an additional flat bonus of {_fmt_money(prep_bonus)}. "
+        f"No one’s salary can exceed <b>{_fmt_money(max_salary)}</b> — that’s the maximum under this model."
+    )
+
+    raise_text = (
+        "<b>How raises are applied</b><br>"
+        "We compare each person’s cohort-aligned salary to their current salary with a cost-of-living adjustment. "
+        f"The cost-of-living adjustment is {cola_floor*100:.0f}%. Each person receives whichever is higher: the "
+        "cohort-aligned salary or the COLA raise. This ensures no one is left behind while aligning most salaries with the model."
+    )
+
+    # ---------------- 3) Worked example (calculated via live function) -----------------
+    if example is None:
+        example = dict(years=18.0, seniority=2.0, degree="MA", prep=1, skill=0, current=73_000)
+
+    ex_df = pd.DataFrame([{
+        "Years of Exp": float(example.get("years")),
+        "Seniority": float(example.get("seniority")),
+        "Education Level": str(example.get("degree")),
+        "Prep": int(example.get("prep")),
+        skill_col_name: int(example.get("skill")),
+        "Current": float(example.get("current")),
+    }])
+
+    # --- compute credited years for the example ---
+    total_exp = float(ex_df.loc[0, "Years of Exp"])
+    sen       = float(ex_df.loc[0, "Seniority"])
+    skill     = int(ex_df.get(skill_col_name, 0).iloc[0]) if skill_col_name in ex_df.columns else 0
+
+    outside_exp = max(0.0, total_exp - sen)
+    max_outside = outside_cap_years + (skill_extra_years if skill else 0)
+    credited_outside = min(outside_exp, max_outside)
+    credited_years = sen + credited_outside
+
+    # IMPORTANT: use credited years in the model call
+    ex_df.loc[0, "Years of Exp"] = credited_years
+
+    ex_cons_cap = consultant_predict_capped(
+        ex_df, long,
+        target_percentile=target_percentile,
+        inflation=inflation,
+        base_start=base_start,
+        deg_ma_pct=deg_ma_pct,
+        deg_phd_pct=deg_phd_pct,
+        max_salary=max_salary,
+        prep_col="Prep",
+        prep_bonus=prep_bonus,
+    ).iloc[0]
+
+    ex_cola = ex_df.loc[0, "Current"] * (1.0 + float(cola_floor))
+    ex_paid = max(ex_cons_cap, ex_cola)
+
+    # Pull values once (avoids KeyError on a hard-coded column name)
+    yrs   = float(ex_df.at[0, "Years of Exp"])
+    sen   = float(ex_df.at[0, "Seniority"])
+    deg   = str(ex_df.at[0, "Education Level"])
+    prep  = int(ex_df.at[0, "Prep"])
+    skill = int(ex_df.at[0, skill_col_name])  # <-- use the configured column
+    curr  = float(ex_df.at[0, "Current"])
+
+    # --- Compute credited years for the example person ---
+    total_exp = yrs
+    outside_exp = max(0.0, total_exp - sen)
+
+    # Apply outside cap and skill bump
+    max_outside = outside_cap_years + (skill_extra_years if skill else 0)
+    credited_outside = min(outside_exp, max_outside)
+
+    credited_years = sen + credited_outside
+
+    ex_lines = [
+        "<b>Worked example</b>",
+        f"• Features: Years={yrs:.1f}, Seniority={sen:.1f}, Degree={deg}, Prep={prep}, Skill Endorsement={skill}, ",
+        f"• Credited Years (used in model) = {credited_years:.1f}",
+        f"• 25-26 Salary = {_fmt_money(curr)}",
+        "",
+        f"• Cohort-aligned Salary = { _fmt_money(ex_cons_cap) }",
+        f"• {int(cola_floor*100)}% COLA Salary = { _fmt_money(ex_cola) }",
+        "",
+        f"• <b>26-27 Salary </b> (max of the two) = <b>{ _fmt_money(ex_paid) }</b>",
+    ]
+    example_text = "<br>".join(ex_lines)
+
+    # Wrap for better readability in the annotation box (narrower width for shorter lines)
+    years_text_wrapped   = _wrap_html(years_text)
+    cons_text_wrapped    = _wrap_html(cons_text)
+    raise_text_wrapped   = _wrap_html(raise_text)
+    example_text_wrapped = _wrap_html(example_text)
+
+    narrative_html = "<br><br>".join([
+        years_text_wrapped,
+        cons_text_wrapped,
+        raise_text_wrapped,
+        example_text_wrapped
+    ])
+
+    # ---------------- 4) Compose layout (narrative middle/top, table bottom) ----------
+    fig = go.Figure()
+    fig.add_trace(table)
+
+    # Table header above the table
+    fig.add_annotation(
+        x=0.06, y=0.37, xref="paper", yref="paper",
+        text="<b>Cohort targets</b> (inflation-adjusted & capped)",
+        showarrow=False, align="left", font=dict(size=14)
+    )
+
+    # Narrative box near the top, left-aligned, auto-wrapped
+    fig.add_annotation(
+        x=0.06, y=.95, xref="paper", yref="paper",
+        text=narrative_html, showarrow=False, align="left",
+        xanchor="left", yanchor="top",
+        bgcolor="rgba(255,255,255,0.85)",
+        bordercolor="rgba(0,0,0,0.15)", borderwidth=1,
+        font=dict(size=12)
+    )
+
+    # Title & margins
+    fig.update_layout(
+        template="plotly_white",
+        width=1100, height=800,                 # a bit taller to give the table room
+        margin=dict(l=30, r=30, t=60, b=28),
+        title=dict(
+            text=(
+                "Cohort-aligned plan overview<br>"
+                f"Target=P{int(round(target_percentile))} · Inflation={inflation*100:.0f}% · "
+                f"MA=+{deg_ma_pct*100:.0f}% · PhD=+{deg_phd_pct*100:.0f}% · "
+                f"Prep bonus={_fmt_money(prep_bonus)} · Cap={_fmt_money(max_salary)} · "
+                f"COLA floor={cola_floor*100:.0f}%"
+            ),
+            x=0.0, xanchor="left"
+        ),
+    )
+
+    # Write file
     import os
     os.makedirs(os.path.dirname(path_html), exist_ok=True)
     fig.write_html(path_html, include_plotlyjs="cdn", full_html=True)
