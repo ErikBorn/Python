@@ -74,16 +74,23 @@ def plan_costs(
     real_col: str,
     planned_col: str,
     bump: float = 0.02,
+    *,
+    real_headcount: int | float | None = None,   # NEW: optional calibration target
 ) -> Dict[str, float]:
     """
     Compute headline costs for a planned salary column vs real salaries.
 
+    If `real_headcount` is provided and > 0, scales the Total Cost by
+    (real_headcount / observed_headcount) so totals reflect the full faculty size.
+
     Returns:
       {
-        "Total Cost": float,             # sum(max(planned - real, 0))
-        "Avg Cost per Person": float,    # average uplift across all rows
+        "Total Cost": float,             # sum(max(planned - real, 0)) * scale
+        "Avg Cost per Person": float,    # average uplift across observed rows (unscaled)
         "Num Raised": int,               # count of rows with uplift > baseline bump
-        "Headcount": int
+        "Headcount": int,                # observed rows used in calc
+        "Real Headcount": int | None,    # echo of calibration target
+        "Scale Factor": float,           # Real/Observed (1.0 if no calibration)
       }
     """
     if real_col not in staff.columns or planned_col not in staff.columns:
@@ -100,16 +107,27 @@ def plan_costs(
             "Avg Cost per Person": 0.0,
             "Num Raised": 0,
             "Headcount": 0,
+            "Real Headcount": int(real_headcount) if real_headcount is not None else None,
+            "Scale Factor": 1.0,
         }
 
-    uplift = np.maximum(planned[m] - real[m], 0.0)
+    uplift   = np.maximum(planned[m] - real[m], 0.0)
     baseline = real[m] * bump
+    obs_hc   = int(uplift.size)
+
+    # --- calibration scale (applies to Total Cost only) ---
+    if real_headcount is not None and float(real_headcount) > 0 and obs_hc > 0:
+        scale = float(real_headcount) / float(obs_hc)
+    else:
+        scale = 1.0
 
     return {
-        "Total Cost": float(np.sum(uplift)),
+        "Total Cost": float(np.sum(uplift)) * scale,
         "Avg Cost per Person": float(np.mean(uplift)) if uplift.size else 0.0,
-        "Num Raised": int(np.sum(uplift > baseline)),  # <-- only above baseline
-        "Headcount": int(uplift.size),
+        "Num Raised": int(np.sum(uplift > baseline)),   # not scaled
+        "Headcount": obs_hc,
+        "Real Headcount": int(real_headcount) if real_headcount is not None else None,
+        "Scale Factor": float(scale),
     }
 
 
@@ -267,36 +285,43 @@ def plan_costs_table(
     real_col: str,
     planned_cols: list[str],
     labels: list[str] | None = None,
-    bump_compare: float = 0.02,
+    bump_compare: float | None = 0.02,
     format_output: bool = True,
+    *,
+    real_headcount: int | float | None = None,   # NEW: calibrate totals
+    bump_for_plans: float | None = None,         # optional: override bump used inside plan_costs
 ) -> pd.DataFrame:
     """
-    Build a table of plan costs (+ a 'Current +X%' comparison row).
-      - planned_cols are the columns already created by plan_salary_column
-      - labels are the row names to show (defaults to planned_cols' short names)
-    """
-    from .planning import plan_costs  # self-import is fine inside the same module
+    Build a table of plan costs (+ an optional 'Current +X%' comparison row).
 
+    - planned_cols are the columns already created by plan_salary_column.
+    - labels are the row names to show (defaults to planned_cols).
+    - If real_headcount is provided, Total Cost is scaled to that HC in plan_costs.
+    - If bump_compare is None, the comparison row is omitted.
+    """
     if labels is None:
         labels = planned_cols
 
     rows = {}
-    # Each planned column
     for lab, col in zip(labels, planned_cols):
-        rows[lab] = plan_costs(staff, real_col, col)
+        rows[lab] = plan_costs(
+            staff, real_col, col,
+            bump=(0.02 if bump_for_plans is None else float(bump_for_plans)),
+            real_headcount=real_headcount
+        )
 
-    # Comparison row: Current +2% (all)
-    rows[f"Current +{int(round(bump_compare*100))}% (all)"] = global_bump_costs(staff, real_col, bump_compare)
+    # Optional comparison row: Current +X% (all)
+    if bump_compare is not None:
+        rows[f"Current +{int(round(float(bump_compare)*100))}% (all)"] = \
+            global_bump_costs(staff, real_col, float(bump_compare))
 
     df = pd.DataFrame.from_dict(rows, orient="index")
 
     if format_output:
-        # Make a pretty copy with rounding + dollar formatting
         fmt = df.copy()
         for c in ["Total Cost", "Avg Cost per Person"]:
             if c in fmt.columns:
                 fmt[c] = fmt[c].apply(format_money_10)
-        # Num Raised stays integer
         if "Num Raised" in fmt.columns:
             fmt["Num Raised"] = fmt["Num Raised"].astype(int)
         return fmt

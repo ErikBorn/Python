@@ -122,6 +122,20 @@ def _build_anchors(long: pd.DataFrame,
 
     return xp, fp
 
+def _add_flag_bonuses(y: np.ndarray,
+                      staff: pd.DataFrame,
+                      bonus_pairs: list[tuple[str, float]]) -> np.ndarray:
+    """Add Σ 1{col==1} * bonus for each (col, bonus) pair."""
+    out = y.copy()
+    for col, amt in bonus_pairs:
+        if not col or amt is None:
+            continue
+        flags = _coerce_flag(staff.get(col))
+        if flags is not None and np.any(flags > 0):
+            out = out + flags * float(amt)
+    return out
+
+
 def consultant_predict(
     staff: pd.DataFrame,
     long: pd.DataFrame,
@@ -129,27 +143,30 @@ def consultant_predict(
     target_percentile: float = 50.0,
     inflation: float = 0.04,
     base_start: float | None = None,
-    # positive-only bumps (defaults are examples):
+    # positive-only degree bumps
     deg_ma_pct: float = 0.02,
     deg_phd_pct: float = 0.04,
     years_col: str = "Years of Exp",
     edu_col: str = "Education Level",
-    # flat bonus
-    prep_col: str = "Prep",
+    # flat bonuses (any row with flag==1 gets the amount)
+    prep_col: str = "Prep Rating",
     prep_bonus: float = 2500.0,
-    # NEW: pre-degree downshift of baseline
-    pre_degree_down_pct: float = 0.03,   # e.g., 3% downward aim
-    auto_downshift: bool = False,        # if True, compute from staff’s degree mix
+    skill_col: str = "Skill Rating",
+    skill_bonus: float = 0.0,              # <- set in YAML if you want a Skill stipend
+    leadership_col: str = "Leadership Rating",
+    leadership_bonus: float = 0.0,        # <- set in YAML if you
+    # baseline aim
+    pre_degree_down_pct: float = 0.03,
+    auto_downshift: bool = False,
 ) -> pd.Series:
     """
-    Consultant model (revised):
-      1) Build/interpolate a *baseline* curve from anchors (bands @ target %ile, inflated).
-      2) Apply a global downward factor (1 - pre_degree_down_pct) so that adding positive degree
-         bumps doesn't blow the budget; optionally compute that factor from the staff mix.
-      3) Apply positive-only degree multipliers: MA=+ma_pct, PhD=+phd_pct (PhD overrides).
-      4) Add flat Prep bonus (+prep_bonus) for rows with Prep==1.
+    Consultant curve (bands@percentile -> smooth baseline -> degree multipliers -> flat flag bonuses).
+
+    Notes:
+      • Years are taken directly from `staff[years_col]` (you’re providing them).
+      • Flat bonuses: any column listed where the value coerces to 1 gives the fixed stipend.
     """
-    # Anchors & interpolation
+    # 1) build smooth baseline from cohort anchors (inflated)
     xp, fp = _build_anchors(
         long,
         target_percentile=target_percentile,
@@ -157,29 +174,35 @@ def consultant_predict(
         base_start=base_start,
     )
     yrs = pd.to_numeric(staff[years_col], errors="coerce").fillna(0.0).to_numpy(dtype=float)
-    base_curve = _interp_with_tail(yrs, xp, fp)
+    base = _interp_with_tail(yrs, xp, fp)
 
-    # Pre-degree downshift (either fixed value or auto from degree mix)
+    # 2) aim the baseline down before degree bumps
     if auto_downshift:
         edu_series = staff.get(edu_col, pd.Series(index=staff.index, dtype="object"))
         est = _expected_uplift_from_mix(edu_series, ma_pct=deg_ma_pct, phd_pct=deg_phd_pct)
-        k = max(0.0, min(1.0, 1.0 - est))   # clamp to [0,1]
+        k = max(0.0, min(1.0, 1.0 - est))
     else:
-        k = 1.0 - float(pre_degree_down_pct)
-    k = max(0.0, k)  # safety
-    base_curve = base_curve * k
+        k = max(0.0, 1.0 - float(pre_degree_down_pct))
+    base *= k
 
-    # Degree bumps (positive only)
+    # 3) degree multipliers (positive-only)
     mult = _degree_multiplier_positive(
         staff.get(edu_col, pd.Series(index=staff.index, dtype="object")),
         ma_pct=deg_ma_pct, phd_pct=deg_phd_pct
     )
-    y = base_curve * mult
+    y = base * mult
 
-    # Flat Prep bonus
-    pf = _coerce_flag(staff.get(prep_col, staff.get("Prep Rating")))
-    if pf is not None and np.any(pf > 0):
-        y = y + pf * float(prep_bonus)
+    # 4) flat bonuses (Prep / Skill / anything in bonus_map)
+    # assemble (col, amount) pairs; ignore None/0 gracefully
+    pairs: list[tuple[str, float]] = []
+    if prep_col and float(prep_bonus or 0) != 0:
+        pairs.append((prep_col, float(prep_bonus)))
+    if skill_col and float(skill_bonus or 0) != 0:
+        pairs.append((skill_col, float(skill_bonus)))
+    if leadership_col and float(leadership_bonus or 0) != 0:
+        pairs.append((leadership_col, float(leadership_bonus)))
+
+    y = _add_flag_bonuses(y, staff, pairs)
 
     return pd.Series(y, index=staff.index, name="CONS Salary")
 
@@ -196,15 +219,16 @@ def consultant_predict_capped(
     max_salary: float | None = 100_000.0,
     years_col: str = "Years of Exp",
     edu_col: str = "Education Level",
-    prep_col: str = "Prep",
+    prep_col: str = "Prep Rating",
     prep_bonus: float = 2500.0,
+    skill_col: str = "Skill Rating",
+    skill_bonus: float = 0.0,
+    leadership_col: str = "Leadership Rating",
+    leadership_bonus: float = 0.0,        # <- set in YAML if you
     pre_degree_down_pct: float = 0.03,
     auto_downshift: bool = False,
 ) -> pd.Series:
-    """
-    Same logic as consultant_predict (with positive degree bumps + pre-downshift),
-    then cap at `max_salary`.
-    """
+    """Same as `consultant_predict`, then cap at `max_salary`."""
     y = consultant_predict(
         staff, long,
         target_percentile=target_percentile,
@@ -216,11 +240,15 @@ def consultant_predict_capped(
         edu_col=edu_col,
         prep_col=prep_col,
         prep_bonus=prep_bonus,
+        skill_col=skill_col,
+        skill_bonus=skill_bonus,
+        leadership_col=leadership_col,
+        leadership_bonus=leadership_bonus,
         pre_degree_down_pct=pre_degree_down_pct,
         auto_downshift=auto_downshift,
     ).astype(float)
 
     if max_salary is not None and np.isfinite(max_salary):
-        y = np.minimum(y.to_numpy(dtype=float), float(max_salary))
+        y = np.minimum(y, float(max_salary))
 
     return pd.Series(y, index=staff.index, name="CONS_CAP Salary")

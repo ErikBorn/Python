@@ -81,7 +81,7 @@ def nonlinear_predict(
     # optional linear adds
     skill = pd.to_numeric(sf.get("Skill Rating",      0), errors="coerce").fillna(0.0).to_numpy()
     prep  = pd.to_numeric(sf.get("Prep Rating",       0), errors="coerce").fillna(0.0).to_numpy()
-    know  = pd.to_numeric(sf.get("Knowledge Rating",  0), errors="coerce").fillna(0.0).to_numpy()
+    know  = pd.to_numeric(sf.get("Leadership Rating",  0), errors="coerce").fillna(0.0).to_numpy()
     linear_adds = w_skill*skill + w_prep*prep + w_knowledge*know + lvl_add
 
     base_curve = base_salary + exp_contrib + sen_contrib + linear_adds

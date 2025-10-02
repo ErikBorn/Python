@@ -1,0 +1,36 @@
+paths:
+  staff_csv: SalaryAnalysis/data/staff.csv
+  cohort_csv: SalaryAnalysis/data/cohort_state.csv       # state (required)
+  out_dir: SalaryAnalysis/outputs
+
+consultant:
+  target_percentile: 50
+  inflation: 0.02
+  deg_ma_pct: 0.04
+  deg_phd_pct: 0.08
+  pre_degree_down_pct: 0.03
+  # base_start:  (optional)
+  # prep_bonus:  (optional; if omitted, use planning.prep_bonus)
+
+consultant_capped:
+  max_salary: 90000
+  # inflation/target_percentile/base_start can override above if you want
+
+local_cohort:
+  enabled: true
+  csv: SalaryAnalysis/data/cohort_local.csv
+  target_percentile: 50   # <- independent of state; omit to use state’s
+
+planning:
+  bump: 0.02
+  tol: 0.02
+  faculty_size: 87.5        # for calibrated totals
+  prep_bonus: 2500
+
+experience_policy:
+  cap_outside_years: 15
+  extra_years_per_skill: 5
+  skill_endorsement_col: Skill Endorsement
+
+plots:
+  plus_minus_pct: 0.10

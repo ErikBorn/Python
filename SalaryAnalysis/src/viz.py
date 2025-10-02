@@ -329,29 +329,45 @@ def plot_scatter_models_interactive(
     hover_cols: Optional[List[str]] = None,
     marker_size: int = 9,
     *,
-    # NEW: optional cohort bands overlay
     long: Optional[pd.DataFrame] = None,
     target_percentile: Optional[float] = None,
     plus_minus_pct: float = 0.10,
-    inflation: float = 0.0,               # set if your targets should be inflated
-    band_color: str = "rgba(44,160,44,0.85)",  # Plotly dark green
-    summary_info: Optional[dict] = None,  # textbox
+    inflation: float = 0.0,
+    band_color: str = "rgba(44,160,44,0.85)",
+    summary_info: Optional[dict] = None,
+    per_band_table: Optional[pd.DataFrame] = None,  # <— the DataFrame you already compute
 ):
     if years_col not in staff.columns:
         raise ValueError(f"Missing years column: {years_col!r}")
 
+    # --- build hover fields ---------------------------------------------------
+    # start with caller list or sensible defaults
     if hover_cols is None:
         hover_cols = [c for c in
-                      ["Employee","ID","Seniority","Education Level","Level","Category"]
+                      ["Employee", "ID", "Seniority", "Education Level", "Level", "Category"]
                       if c in staff.columns]
+
+    # ensure stipend/ratings are shown when available (don’t duplicate)
+    def _maybe_add(col_names: List[str]):
+        for c in col_names:
+            if c in staff.columns and c not in hover_cols:
+                hover_cols.append(c)
+                break
+
+    _maybe_add(["Prep", "Prep Rating"])
+    _maybe_add(["Skill Rating"])
+    _maybe_add(["Leadership Rating", "Knowledge Rating"])
 
     pal = {**_DEFAULT_COLORS, **(colors or {})}
     fig = go.Figure()
     x_all = pd.to_numeric(staff[years_col], errors="coerce").to_numpy()
 
-    # --- model scatters (unchanged) ---
+    # --- model scatters -------------------------------------------------------
     ymins, ymaxs = [], []
     jitter = np.linspace(-0.15, 0.15, num=max(3, len(cols_dict)))
+
+    # by default only these traces visible (others start hidden in legend)
+    _default_visible = {"Real", "CONS_Cap_Real"}
 
     for i, (label, col) in enumerate(cols_dict.items()):
         if col not in staff.columns:
@@ -388,61 +404,57 @@ def plot_scatter_models_interactive(
             marker=dict(size=marker_size, color=pal.get(label)),
             text=text,
             hovertemplate="%{text}<extra></extra>",
+            visible=True if label in _default_visible else "legendonly",
         ))
         ymins.append(np.nanmin(y[m])); ymaxs.append(np.nanmax(y[m]))
 
-    # --- determine x-range (use staff; add bands later) ---
-    if np.isfinite(x_all).any():
-        staff_max_years = max(40, int(np.nanmax(x_all)))
-    else:
-        staff_max_years = 40
+    # --- determine x-range (use staff; add bands later) ----------------------
+    x_right = max(40, int(np.nanmax(x_all))) if np.isfinite(x_all).any() else 40
 
-    x_right = staff_max_years  # may increase once we inspect bands
-
-    # --- optional flat band overlay ---
+    # --- optional flat band overlay ------------------------------------------
+    band_ymins, band_ymaxs = [], []
     if long is not None and target_percentile is not None:
-        from .cohort import build_band_bins_closed, interpolate_salary_strict
         bins, _ = build_band_bins_closed(long)
-
         finite_bins = [(s, e, lab) for (s, e, lab) in bins if np.isfinite(e)]
-        
-    first_drawn = True
-    for start, end, label in finite_bins:
-        x0 = float(start)
-        x1 = float(end)
+        if finite_bins:
+            x_right = max(x_right, int(max(e for (_, e, _) in finite_bins)))
 
-        y = interpolate_salary_strict(long, label, float(target_percentile))
-        if pd.isna(y):
-            continue
-        y = float(y) * (1.0 + float(inflation))
-        y_lo = y * (1.0 - plus_minus_pct)
-        y_hi = y * (1.0 + plus_minus_pct)
+        first_drawn = True
+        for start, end, label in finite_bins:
+            x0, x1 = float(start), float(end)
+            y = interpolate_salary_strict(long, label, float(target_percentile))
+            if pd.isna(y):
+                continue
+            y = float(y) * (1.0 + float(inflation))
+            y_lo = y * (1.0 - plus_minus_pct)
+            y_hi = y * (1.0 + plus_minus_pct)
 
-        # solid target line
-        fig.add_trace(go.Scatter(
-            x=[x0, x1], y=[y, y],
-            mode="lines",
-            line=dict(width=3, color=band_color),
-            name=f"{label} @ P{int(round(target_percentile))}",
-            legendgroup="bands",
-            showlegend=first_drawn,     # only once
-            hoverinfo="skip",
-        ))
-        # dashed ± lines
-        for yd in (y_lo, y_hi):
             fig.add_trace(go.Scatter(
-                x=[x0, x1], y=[yd, yd],
+                x=[x0, x1], y=[y, y],
                 mode="lines",
-                line=dict(width=1.5, color=band_color, dash="dash"),
-                name="± band",
+                line=dict(width=3, color=band_color),
+                name=f"Bands @P{int(round(target_percentile))}",
                 legendgroup="bands",
-                showlegend=False,
+                showlegend=first_drawn,
                 hoverinfo="skip",
+                visible=True,  # bands visible by default
             ))
+            for yd in (y_lo, y_hi):
+                fig.add_trace(go.Scatter(
+                    x=[x0, x1], y=[yd, yd],
+                    mode="lines",
+                    line=dict(width=1.5, color=band_color, dash="dash"),
+                    name="± band",
+                    legendgroup="bands",
+                    showlegend=False,
+                    hoverinfo="skip",
+                    visible=True,
+                ))
+            band_ymins.extend([y_lo, y, y_hi])
+            band_ymaxs.extend([y_lo, y, y_hi])
+            first_drawn = False
 
-        first_drawn = False
-
-    # --- layout / axes ---
+    # --- layout / axes --------------------------------------------------------
     fig.update_layout(
         title=title,
         xaxis_title="Years of Experience",
@@ -453,28 +465,113 @@ def plot_scatter_models_interactive(
         hovermode="closest",
         hoverlabel=dict(namelength=-1),
     )
+        # --- optional small per-band table overlay (bottom-right) ---
+    if per_band_table is not None and not per_band_table.empty:
+        # Keep it small: choose just a few columns you want to show
+        # Example expects columns like ["Real","CONS","CONS_CAP","CONS_Cap_Real","COLA 2%"]
+        # Rename to short labels for the display
+        rename_cols = {
+            "Real": "Real",
+            "CONS": "Cons",
+            "CONS_CAP": "Cap",
+            "CONS_Cap_Real": "CCR",
+            "COLA 2%": "COLA",
+        }
+        # Try to preserve only columns that exist
+        show_cols = [c for c in ["Real","CONS","CONS_CAP","CONS_Cap_Real","COLA 2%"] if c in per_band_table.columns]
+        tbl = per_band_table[show_cols].copy()
+        tbl = tbl.rename(columns=rename_cols)
 
-    if ymins and ymaxs:
-        ymin, ymax = float(np.nanmin(ymins)), float(np.nanmax(ymaxs))
-        pad = 0.06 * (ymax - ymin if ymax > ymin else max(ymax, 1))
+        # Truncate: no decimals; coerce safely
+        tbl = tbl.apply(lambda s: pd.to_numeric(s, errors="coerce").round(0).astype("Int64"))
+
+        # Build HTML table
+        header_cells = "".join([f"<th style='padding:4px 8px;text-align:right;'>{c}</th>" for c in tbl.columns])
+        body_rows = []
+        for idx, row in tbl.iterrows():
+            # band label might be the index; use str(idx)
+            cells = "".join([f"<td style='padding:2px 8px;text-align:right;'>{'' if pd.isna(v) else int(v)}</td>"
+                             for v in row.to_list()])
+            body_rows.append(
+                f"<tr><td style='padding:2px 8px;text-align:left;'>{idx}</td>{cells}</tr>"
+            )
+
+        # small_html = (
+        #     "<div style='font-family:ui-monospace,monospace;font-size:11px;"
+        #     "background:rgba(255,255,255,0.9);padding:6px 8px;border:1px solid rgba(0,0,0,.2);"
+        #     "border-radius:6px;'>"
+        #     "<div style='font-weight:700;margin-bottom:4px;'>Median achieved %ile by band</div>"
+        #     "<table style='border-collapse:collapse;'>"
+        #     "<tr><th style='padding:4px 8px;text-align:left;'>Band</th>"
+        #     f"{header_cells}</tr>"
+        #     f"{''.join(body_rows)}"
+        #     "</table></div>"
+        # )
+
+    Ymins = ymins + band_ymins
+    Ymaxs = ymaxs + band_ymaxs
+    if Ymins and Ymaxs:
+        ymin, ymax = float(np.nanmin(Ymins)), float(np.nanmax(Ymaxs))
+        pad = 0.06 * (ymax - ymin if ymax > ymin else max(abs(ymax), 1.0))
         fig.update_yaxes(range=[ymin - pad, ymax + pad])
 
-    fig.update_xaxes(dtick=5, range=[0, x_right + 1])  # +1 year headroom
+    fig.update_xaxes(dtick=5, range=[0, x_right + 1])
 
-    # --- optional summary box (unchanged) ---
+    # --- summary box (your enhanced version stays as-is) ----------------------
     if summary_info:
-        params = summary_info.get("params", {})
-        models = summary_info.get("models", {})
+        params = summary_info.get("params", {}) or {}
+        models = summary_info.get("models", {}) or {}
         lines = []
-        tgt = params.get("target_percentile")
-        inf = params.get("target_inflation")
+
+        # Accept several possible keys for target, then fall back to function arg
+        tgt  = (params.get("target_percentile")
+                or params.get("target_percentile_state")
+                or params.get("target_percentile_local")
+                or target_percentile)
+        inf  = params.get("target_inflation")
         cola = params.get("cola")
-        if tgt is not None or inf is not None or cola is not None:
-            lines += ["<b>Parameters</b>"]
+
+        # NEW: extra knobs
+        down = params.get("downshift_pct")        # fraction, e.g. 0.03
+        ma   = params.get("deg_ma_pct")           # fraction
+        phd  = params.get("deg_phd_pct")          # fraction
+        prep = params.get("prep_bonus")           # dollars
+        skbo = params.get("skill_bonus")          # dollars
+        lebo = params.get("leadership_bonus")     # dollars
+
+        def _pct(x):
+            try:
+                return f"{float(x)*100:.1f}%"
+            except Exception:
+                return None
+
+        if any(v is not None for v in (tgt, inf, cola, down, ma, phd, prep, skbo, lebo)):
+            lines.append("<b>Parameters</b>")
             if tgt  is not None: lines.append(f"Target: P{int(round(float(tgt)))}")
-            if inf  is not None: lines.append(f"Inflation: {float(inf)*100:.1f}%")
-            if cola is not None: lines.append(f"COLA floor: {float(cola)*100:.1f}%")
+            if inf  is not None: lines.append(f"Inflation: {_pct(inf)}")
+            if cola is not None: lines.append(f"COLA floor: {_pct(cola)}")
+
+            knob_bits = []
+            if down is not None:
+                knob_bits.append(f"Baseline adj: −{_pct(down)}")
+            if ma is not None or phd is not None:
+                bump = []
+                if ma  is not None:  bump.append(f"MA +{_pct(ma)}")
+                if phd is not None: bump.append(f"PhD +{_pct(phd)}")
+                knob_bits.append(", ".join(bump))
+            if prep is not None:
+                knob_bits.append(f"Prep stipend: {_fmt_money(float(prep))}")
+            if skbo is not None and float(skbo) != 0:
+                knob_bits.append(f"Skill stipend: {_fmt_money(float(skbo))}")
+            if lebo is not None and float(lebo) != 0:
+                knob_bits.append(f"Leadership stipend: {_fmt_money(float(lebo))}")
+
+            # break into rows of 3 items each
+            if knob_bits:
+                for i in range(0, len(knob_bits), 3):
+                    lines.append(" · ".join(knob_bits[i:i+3]))
             lines.append("")
+
         if models:
             lines.append("<b>Models</b>")
             for label, d in models.items():
@@ -482,11 +579,16 @@ def plot_scatter_models_interactive(
                 if "total_cost" in d: parts.append(f"Cost {_fmt_money(float(d['total_cost']))}")
                 if "mean_pct"   in d: parts.append(f"Mean %ile {float(d['mean_pct']):.1f}")
                 if "num_raised" in d: parts.append(f"Raised {int(d['num_raised'])}")
+                # If you also pass mean_pct_state/local, show them too (optional):
+                if "mean_pct_state" in d: parts.append(f"State {float(d['mean_pct_state']):.1f}")
+                if "mean_pct_local" in d and d["mean_pct_local"] is not None:
+                    parts.append(f"Local {float(d['mean_pct_local']):.1f}")
                 lines.append("  " + " | ".join(parts))
+
         text = "<br>".join(lines)
 
         fig.add_annotation(
-            x=0.02, y=0.98, xref="paper", yref="paper",
+            x=0.02, y=0.98, xref="paper", yref="paper" ,
             xanchor="left", yanchor="top",
             align="left", showarrow=False,
             bgcolor="rgba(255,255,255,0.85)",
@@ -494,6 +596,56 @@ def plot_scatter_models_interactive(
             text=text, font=dict(size=12)
         )
 
+    # --- optional small per-band table overlay (bottom-right) ---
+    if per_band_table is not None and not per_band_table.empty:
+        # Keep only the columns you want and rename
+        rename_cols = {
+            "Real": "Real",
+            "CONS": "Cons",
+            "CONS_CAP": "Cap",
+            "CONS_Cap_Real": "CCR",
+            "COLA 2%": "COLA",
+        }
+        wanted = [c for c in ["Real","CONS","CONS_CAP","CONS_Cap_Real","COLA 2%"]
+                if c in per_band_table.columns]
+        if not wanted:
+            wanted = list(per_band_table.columns)[:8]
+
+        tbl = per_band_table[wanted].copy().rename(columns=rename_cols)
+
+        # Truncate to whole numbers
+        def _to_int_series(s: pd.Series) -> pd.Series:
+            return pd.to_numeric(s, errors="coerce").round(0).astype("Int64")
+        for c in tbl.columns:
+            tbl[c] = _to_int_series(tbl[c])
+
+        # Keep it compact
+        tbl = tbl.iloc[:10]
+
+        # Build lists for Table: first column = band labels (index)
+        band_labels = tbl.index.astype(str).tolist()
+        value_cols  = [band_labels] + [tbl[c].astype(str).replace("<NA>", "").tolist()
+                                    for c in tbl.columns]
+
+        fig.add_trace(go.Table(
+            header=dict(
+                values=["Band"] + list(tbl.columns),
+                align="left",
+                fill_color="rgba(242,242,242,1)",
+                font=dict(size=12, color="#333"),
+                height=24,
+            ),
+            cells=dict(
+                values=value_cols,
+                align=["left"] + ["right"] * len(tbl.columns),
+                height=22,
+            ),
+            domain=dict(x=[0.66, 0.98], y=[0.02, 0.30]),  # bottom-right
+            name="Band medians",
+            hoverinfo="skip",   # optional
+            visible=True
+        ))
+    
     import os
     os.makedirs(os.path.dirname(path_html), exist_ok=True)
     fig.write_html(path_html, include_plotlyjs="cdn", full_html=True)
@@ -775,3 +927,36 @@ def cons_cap_overview_html(
     os.makedirs(os.path.dirname(path_html), exist_ok=True)
     fig.write_html(path_html, include_plotlyjs="cdn", full_html=True)
     return fig
+
+def plot_scatter_for_cohort(
+    staff: pd.DataFrame,
+    years_col: str,
+    cols_dict: Dict[str, str],
+    *,
+    long: pd.DataFrame,
+    cohort_label: str,
+    path_html: str,
+    target_percentile: float,
+    inflation: float,
+    plus_minus_pct: float = 0.10,
+    band_color: str = "rgba(44,160,44,0.85)",
+    summary_info: Optional[dict] = None,
+    marker_size: int =  9,  # matches your default
+    hover_cols: Optional[List[str]] = None,
+):
+    title = f"Salaries vs Years of Experience — {cohort_label}"
+    return plot_scatter_models_interactive(
+        staff,
+        years_col=years_col,
+        cols_dict=cols_dict,
+        path_html=path_html,
+        title=title,
+        long=long,
+        target_percentile=target_percentile,
+        inflation=inflation,
+        plus_minus_pct=plus_minus_pct,
+        band_color=band_color,
+        summary_info=summary_info,
+        marker_size=marker_size,
+        hover_cols=hover_cols,
+    )

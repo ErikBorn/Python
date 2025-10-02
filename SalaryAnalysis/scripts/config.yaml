@@ -1,10 +1,11 @@
 paths:
-  cohort_csv: SalaryAnalysis/data/cohort.csv
+  cohort_csv: SalaryAnalysis/data/cohort_state.csv
+  local_cohort_csv: SalaryAnalysis/data/cohort_local.csv
   staff_csv:  SalaryAnalysis/data/staff.csv
   out_dir:    SalaryAnalysis/outputs
 
 cohort:
-  target_percentile: 70
+  target_percentile: 50
   target_inflation: 0.02
 
 nonlinear:
@@ -32,19 +33,23 @@ piecewise:
   prep_bonus: 2500
 
 experience_policy:
-  cap_outside_years: 10
+  cap_outside_years: 50
   skill_endorsement_col: "Skill Endorsement"   # set to null/"" if you don’t have this column
   extra_years_per_skill: 5
 
 consultant:
-  target_percentile: 70        # anchor bands @ P50 (change any time)
-  inflation: 0.02            # +2% inflation on anchors (and base_start)
-  base_start: null             # e.g., 55000  (or leave null to omit the 0-year anchor)
-  deg_ba_pct: 0            # BA -4%
-  deg_ma_pct: 0.04             # MA  0%
-  deg_phd_pct: 0.08            # PhD +4%
-  pre_degree_down_pct: 0.03
+  target_percentile: 50
+  inflation: 0.02
+  deg_ma_pct: 0.04
+  deg_phd_pct: 0.08
+  pre_degree_down_pct: 0.05
+  # bonuses
+  prep_col: "Prep Rating"
   prep_bonus: 2500
+  skill_col: "Skill Rating"
+  skill_bonus: 2000
+  lead_col: "Leadership Rating"
+  leadership_bonus: 3000
 
 consultant_capped:
   enabled: true
@@ -55,6 +60,7 @@ planning:
   bump: 0.02
   tol: 0.02
   keep_above_uplift: 0.02
+  faculty_size: 87.5
 
 plots:
   plus_minus_pct: 0.10

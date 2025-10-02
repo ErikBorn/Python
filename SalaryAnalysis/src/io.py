@@ -55,26 +55,64 @@ def load_staff(path: str) -> pd.DataFrame:
 
 def load_cohort(path: str) -> pd.DataFrame:
     """
-    Load state cohort CSV and return tidy long format.
-    Columns in the input: 'State', optional base column, and experience bands.
-    Output columns: ['experience_band', 'percentile', 'salary'].
+    Load a cohort CSV and return tidy long format.
+
+    Accepts first-column labels named 'State', 'Local', 'Percentile', or any
+    column that appears to contain percentile rows (e.g., '90th Percentile',
+    '50th Percentile (Median)', etc.).
+
+    Output columns: ['experience_band', 'percentile', 'salary'] with one row
+    per (band, percentile).
     """
+    import re
     raw = pd.read_csv(path)
+    raw.columns = [str(c).strip() for c in raw.columns]  # normalize headers
 
-    # Identify label column and optional base
-    label_col = "State"
-    base_col = next((c for c in raw.columns if "Base Salaries" in c), None)
+    cols_lower = {c: c.lower() for c in raw.columns}
 
-    # Bands = all non-label, non-base
-    band_cols = [c for c in raw.columns if c not in [label_col, base_col] and c is not None]
+    # --- find the label column (percentile names) ----------------------------
+    # Direct matches first
+    label_candidates = [c for c in raw.columns
+                        if cols_lower[c] in {"state", "local", "percentile"}]
 
-    # Clean numeric
+    # If not found, pick the column whose values look like percentile labels
+    if not label_candidates:
+        def looks_like_pct_series(s: pd.Series) -> bool:
+            sample = s.dropna().astype(str).str.lower().head(6)
+            pat = re.compile(r"(?:\d{1,2}0th|median).*percentile")
+            return sample.str.contains(pat).any()
+        for c in raw.columns:
+            if looks_like_pct_series(raw[c]):
+                label_candidates = [c]
+                break
+
+    if not label_candidates:
+        raise ValueError(
+            f"No label column found in {path}. "
+            "Expected a column named 'State' or 'Local' or something that contains percentile labels."
+        )
+
+    label_col = label_candidates[0]
+
+    # --- find optional base column (starting salaries) -----------------------
+    base_col = None
+    for c in raw.columns:
+        lc = cols_lower[c]
+        if c != label_col and ("base" in lc or "starting" in lc):
+            base_col = c
+            break
+
+    # --- all remaining columns are the experience bands ----------------------
+    band_cols = [c for c in raw.columns if c not in {label_col, base_col}]
+
+    # --- numeric cleaning helper ---------------------------------------------
     def _to_num(x):
         if pd.isna(x):
             return np.nan
         if isinstance(x, (int, float)):
             return float(x)
-        s = str(x).replace("$", "").replace(",", "").replace("\xa0", " ").strip()
+        s = (str(x).replace("$", "").replace(",", "")
+                   .replace("\xa0", " ").strip())
         return pd.to_numeric(s, errors="coerce")
 
     clean = raw.copy()
@@ -83,7 +121,7 @@ def load_cohort(path: str) -> pd.DataFrame:
     for c in band_cols:
         clean[c] = clean[c].map(_to_num)
 
-    # Normalize percentile labels
+    # --- normalize percentile labels to p10/p25/p50/p75/p90 ------------------
     norm = clean[label_col].astype(str).str.lower().str.strip()
     norm = norm.replace({
         "90th percentile": "p90",
@@ -92,18 +130,35 @@ def load_cohort(path: str) -> pd.DataFrame:
         "25th percentile": "p25",
         "10th percentile": "p10",
     })
+    # also handle minor variants
+    norm = (norm.str.replace("percentile", "", regex=False)
+                .str.replace("(median)", "", regex=False)
+                .str.strip()
+                .replace({"90th": "p90", "75th": "p75", "50th": "p50",
+                          "25th": "p25", "10th": "p10"}))
+
     clean["percentile_label"] = norm
     clean["percentile"] = clean["percentile_label"].map(
         {"p10": 10, "p25": 25, "p50": 50, "p75": 75, "p90": 90}
     )
 
-    # Reshape
-    long = clean.melt(
-        id_vars=["percentile_label", "percentile"] + ([base_col] if base_col else []),
-        value_vars=band_cols,
-        var_name="experience_band",
-        value_name="salary"
-    ).dropna(subset=["percentile", "salary"])
+    # sanity-check we actually mapped something
+    if clean["percentile"].isna().all():
+        raise ValueError(
+            f"Could not parse percentile labels from column '{label_col}' in {path}."
+        )
+
+    # --- reshape to tidy long -------------------------------------------------
+    id_vars = ["percentile_label", "percentile"]
+    if base_col:
+        id_vars.append(base_col)
+
+    long = (clean
+            .melt(id_vars=id_vars,
+                  value_vars=band_cols,
+                  var_name="experience_band",
+                  value_name="salary")
+            .dropna(subset=["percentile", "salary"]))
 
     return long[["experience_band", "percentile", "salary"]]
 
