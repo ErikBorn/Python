@@ -14,7 +14,7 @@ import numpy as np
 from src.io import load_staff, load_cohort
 from src.policies import apply_outside_exp_cap
 from src.models.consultant import consultant_predict, consultant_predict_capped
-from src.planning import plan_salary_column, plan_costs, plan_costs_table
+from src.planning import plan_salary_column, plan_costs, plan_costs_table, plan_salary_fte
 from src.metrics import achieved_percentiles, band_medians_table, per_band_median_percentiles
 from src.viz import (
     plot_bands,
@@ -36,6 +36,10 @@ def main(cfg):
     # Cohort + staff
     long  = load_cohort(paths["cohort_csv"])
     staff = load_staff(paths["staff_csv"])
+
+    FTE_COL          = "Time Value"
+    REAL_ACTUAL_COL  = "25-26 Salary (real)"
+    REAL_FTE_COL     = "25-26 Salary"          # already FTE-scaled
 
     # --- Experience policy (if you still want it) -----------------------------
     # If you now supply credited years directly, you can disable this in YAML or
@@ -101,39 +105,53 @@ def main(cfg):
         leadership_bonus      = cns.get("leadership_bonus", 0.0),
     )
 
-    # Realized plan (raise-to-model-or-COLA floor)
-    staff["CONS_Cap_Real"] = plan_salary_column(
-        staff,
-        real_col="25-26 Salary",
-        model_col="CONS_CAP Salary",
-        out_col="CONS_Cap_Real",
-        bump=bump,
-        tol=tol,
-    )
+    # --- COLA 2% (actual + FTE) -------------------------------------------------
+    real_actual = _numify_money(staff[REAL_ACTUAL_COL])
+    fte         = _numify_fte(staff[FTE_COL])
 
-    # Simple “everyone +COLA%” column (for comparison)
-    staff["All +2% Plan Salary"] = (
-        pd.to_numeric(staff["25-26 Salary"], errors="coerce") * (1.0 + bump)
-    )
-
-    # --- Costs table (consultant-only) ---------------------------------------
-    # Build explicit plan columns for consistency in downstream usage
-    for label, col in [("CONS", "CONS Salary"), ("CONS_CAP", "CONS_CAP Salary")]:
-        out_col = f"{label} Plan Salary"
-        staff[out_col] = plan_salary_column(
-            staff, "25-26 Salary", col, out_col, bump=bump, tol=tol
+    staff["All +2% Plan Salary (actual)"] = real_actual * (1.0 + float(cfg["planning"]["bump"]))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        staff["All +2% Plan Salary"] = np.where(
+            fte > 0, staff["All +2% Plan Salary (actual)"] / fte, np.nan
         )
 
-    # Calibrated totals to real headcount if provided
-    real_hc = cfg.get("planning", {}).get("faculty_size")
+    staff["_REAL_ACTUAL_NUM"] = _numify_money(staff[REAL_ACTUAL_COL])
+
+    # CONS (actual + FTE)
+    res = plan_salary_fte(
+        staff,
+        real_actual_col=REAL_ACTUAL_COL,
+        model_fte_col="CONS Salary",
+        fte_col=FTE_COL,
+        out_actual_col="CONS Plan Salary (actual)",
+        out_fte_col="CONS Plan Salary",
+        bump=cfg["planning"]["bump"],
+        tol=cfg["planning"]["tol"],
+    )
+    staff["CONS Plan Salary (actual)"] = pd.to_numeric(res["CONS Plan Salary (actual)"], errors="coerce")
+    staff["CONS Plan Salary"]          = pd.to_numeric(res["CONS Plan Salary"],          errors="coerce")
+
+    # CONS_CAP (actual + FTE)
+    res = plan_salary_fte(
+        staff,
+        real_actual_col=REAL_ACTUAL_COL,
+        model_fte_col="CONS_CAP Salary",
+        fte_col=FTE_COL,
+        out_actual_col="CONS_CAP Plan Salary (actual)",
+        out_fte_col="CONS_CAP Plan Salary",
+        bump=cfg["planning"]["bump"],
+        tol=cfg["planning"]["tol"],
+    )
+    staff["CONS_CAP Plan Salary (actual)"] = pd.to_numeric(res["CONS_CAP Plan Salary (actual)"], errors="coerce")
+    staff["CONS_CAP Plan Salary"]          = pd.to_numeric(res["CONS_CAP Plan Salary"],          errors="coerce")
 
     costs_tbl = plan_costs_table(
         staff,
-        real_col="25-26 Salary",
+        real_col=REAL_ACTUAL_COL,
         planned_cols=[
-            "CONS Plan Salary",
-            "CONS_CAP Plan Salary",
-            "All +2% Plan Salary",
+            "CONS Plan Salary (actual)",
+            "CONS_CAP Plan Salary (actual)",
+            "All +2% Plan Salary (actual)",
         ],
         labels=[
             "CONS",
@@ -142,18 +160,17 @@ def main(cfg):
         ],
         bump_compare=None,
         format_output=True,
-        real_headcount=real_hc,
     )
     costs_tbl.to_csv(f"{out}/tables/plan_costs.csv")
 
     # --- Percentiles & band tables (consultant-only) --------------------------
-    cols_dict={
-            "Real":          "25-26 Salary",
-            "CONS":          "CONS Salary",
-            "CONS_CAP":      "CONS_CAP Salary",
-            "CONS_Cap_Real": "CONS_Cap_Real",
-            "COLA 2%":       "All +2% Plan Salary",
-        }
+    cols_dict = {
+        "Real":     "25-26 Salary",
+        "CONS":     "CONS Salary",
+        "CONS_CAP": "CONS_CAP Salary",
+        "CONS_Cap_Real": "CONS_CAP Plan Salary",   # keep label the same for the overlay
+        "COLA 2%":  "All +2% Plan Salary",
+    }
     band_pct_med = per_band_median_percentiles(
         long,
         staff,
@@ -169,7 +186,7 @@ def main(cfg):
             "25-26 Salary",
             "CONS Salary",
             "CONS_CAP Salary",
-            "CONS_Cap_Real",
+            "CONS_CAP Plan Salary",   # was "CONS_Cap_Real"
             "All +2% Plan Salary",
         ],
         years_col="Years of Exp",
@@ -183,7 +200,7 @@ def main(cfg):
             "25-26 Salary",
             "CONS Salary",
             "CONS_CAP Salary",
-            "CONS_Cap_Real",
+            "CONS_CAP Plan Salary",   # <-- was "CONS_Cap_Real"
             "All +2% Plan Salary",
         ],
     )
@@ -223,18 +240,20 @@ def main(cfg):
     # )
 
     # --- Interactive scatter (with summary) ----------------------------------
-    def _model_summary(planned_col):
+    def _model_summary(planned_actual_col, planned_fte_col_for_mean_pct):
         c = plan_costs(
-            staff, real_col="25-26 Salary", planned_col=planned_col,
-            bump=bump, real_headcount=real_hc
+            staff,
+            real_col="_REAL_ACTUAL_NUM",                # actual current
+            planned_col=planned_actual_col,          # actual planned
+            bump=cfg["planning"]["bump"],           # no headcount scaling anymore
         )
-        pct_df = achieved_percentiles(long, staff, salary_cols=[planned_col], years_col="Years of Exp")
-        s = pct_df.squeeze()
-        if isinstance(s, pd.DataFrame):
-            s = s.iloc[:, 0]
+
+        # Mean %ile for the MODEL — compute against FTE view
+        mean_pct = _mean_percentile_against(long, staff, planned_fte_col_for_mean_pct)
+
         return {
             "total_cost": c["Total Cost"],
-            "mean_pct": float(s.get("Mean %ile", np.nan)),
+            "mean_pct":   mean_pct,
             "num_raised": c["Num Raised"],
         }
 
@@ -251,17 +270,28 @@ def main(cfg):
             "leadership_bonus":  cns.get("leadership_bonus", 0.0),
         },
         "models": {
-            "CONS":     _model_summary("CONS Plan Salary"),
-            "CONS_CAP": _model_summary("CONS_CAP Plan Salary"),
-            "COLA 2%":  _model_summary("All +2% Plan Salary"),
+            "CONS":     _model_summary("CONS Plan Salary (actual)",     "CONS Plan Salary"),
+            "CONS_CAP": _model_summary("CONS_CAP Plan Salary (actual)", "CONS_CAP Plan Salary"),
+            "COLA 2%":  _model_summary("All +2% Plan Salary (actual)",  "All +2% Plan Salary"),  # see 4b below
         },
     }
 
     plot_scatter_models_interactive(
         staff,
         years_col="Years of Exp",
-        cols_dict=cols_dict,                       # your traces
+        cols_dict={
+            "Real":          "25-26 Salary",
+            "CONS":          "CONS Salary",
+            "CONS_CAP":      "CONS_CAP Salary",
+            "CONS_Cap_Real": "CONS_CAP Plan Salary",   # legend label unchanged
+            "COLA 2%":       "All +2% Plan Salary",
+        },
         path_html=f"{out}/figures/scatter_models_interactive.html",
+        hover_cols=[c for c in [
+            "Employee","ID","Seniority","Education Level","Level","Category",
+            "Time Value","25-26 Salary (real)"
+        ] if c in staff.columns],
+        marker_size=9,
         long=long,
         target_percentile=cfg["cohort"]["target_percentile"],
         inflation=cfg["cohort"]["target_inflation"],
@@ -330,6 +360,32 @@ def main(cfg):
         path_html           = calc_path,
     )
 
+def _mean_percentile_against(long_cohort, staff, planned_col) -> float:
+    """Mean achieved percentile of `planned_col` against `long_cohort`."""
+    df = achieved_percentiles(long_cohort, staff, salary_cols=[planned_col], years_col="Years of Exp")
+    s = df.squeeze()
+    if isinstance(s, pd.DataFrame):
+        s = s.iloc[:, 0]
+    return float(s.get("Mean %ile", np.nan))
+
+def _numify_money(s: pd.Series) -> pd.Series:
+    if s.dtype == object:
+        s = s.astype(str).str.replace(r"[,\$]", "", regex=True).str.strip()
+    return pd.to_numeric(s, errors="coerce")
+
+def _numify_fte(s: pd.Series) -> pd.Series:
+    if s.dtype == object:
+        st = s.astype(str).str.strip()
+        pct_mask = st.str.endswith("%", na=False)
+        s_pct = pd.to_numeric(st.str.rstrip("%"), errors="coerce") / 100.0
+        s_num = pd.to_numeric(st, errors="coerce")
+        s = np.where(pct_mask, s_pct, s_num)
+        s = pd.Series(s, index=st.index)
+    else:
+        s = pd.to_numeric(s, errors="coerce")
+    big = s > 1.5         # e.g., 80 -> 0.8
+    s.loc[big] = s.loc[big] / 100.0
+    return s.fillna(1.0)
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()

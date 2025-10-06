@@ -327,3 +327,81 @@ def plan_costs_table(
         return fmt
 
     return df
+
+def plan_salary_fte(
+    staff: pd.DataFrame,
+    *,
+    real_actual_col: str,        # e.g. "25-26 Salary (real)"
+    model_fte_col: str,          # e.g. "CONS_CAP Salary" (FTE)
+    fte_col: str = "Time Value", # fraction (1.0 for FT)
+    out_actual_col: str | None = None,  # planned actual $
+    out_fte_col: str | None = None,     # planned FTE $ (for plots/tables)
+    bump: float = 0.02,
+    tol: float = 0.02,
+) -> dict[str, pd.Series]:
+    # --- required columns present? ---
+    for c in (real_actual_col, model_fte_col, fte_col):
+        if c not in staff.columns:
+            raise ValueError(f"Missing column: {c!r}")
+
+    # --- robust cleaners -----------------------------------------------------
+    def _numify_money(s: pd.Series) -> pd.Series:
+        """
+        Convert a money-like series to float:
+        - strips $ and commas
+        - trims whitespace
+        - coerces to float
+        """
+        if s.dtype == object:
+            s = s.astype(str).str.replace(r"[,\$]", "", regex=True).str.strip()
+        return pd.to_numeric(s, errors="coerce")
+
+    def _numify_fte(s: pd.Series) -> pd.Series:
+        """
+        Convert FTE to float in [0,1]:
+        - handles '80%' -> 0.8
+        - handles '0.8', ' 1 ', etc.
+        - fills NaN with 1.0 (assume full-time if missing)
+        """
+        if s.dtype == object:
+            st = s.astype(str).str.strip()
+            pct_mask = st.str.endswith("%", na=False)
+            # percent strings -> divide by 100
+            s_pct = pd.to_numeric(st.str.rstrip("%"), errors="coerce") / 100.0
+            s_num = pd.to_numeric(st, errors="coerce")
+            s = np.where(pct_mask, s_pct, s_num)
+            s = pd.Series(s, index=s.index)
+        else:
+            s = pd.to_numeric(s, errors="coerce")
+
+        # sometimes people store 80 instead of 0.8; if values > 1.5, treat like percent
+        big = s > 1.5
+        s.loc[big] = s.loc[big] / 100.0
+        return s.fillna(1.0)
+
+    # --- sanitize inputs -----------------------------------------------------
+    real_actual = _numify_money(staff[real_actual_col]).to_numpy(dtype=float)
+    model_fte   = _numify_money(staff[model_fte_col]).to_numpy(dtype=float)
+    fte         = _numify_fte(staff[fte_col]).to_numpy(dtype=float)
+
+    # Guard against bad rows: if either model or fte is non-finite, model_actual = NaN
+    with np.errstate(invalid="ignore"):
+        model_actual = np.where(np.isfinite(model_fte) & np.isfinite(fte), model_fte * fte, np.nan)
+
+    # --- apply rule on ACTUAL dollars ---------------------------------------
+    planned_actual = np.array(
+        [apply_raise_rule(r, m, bump=bump, tol=tol) for r, m in zip(real_actual, model_actual)],
+        dtype=float
+    )
+
+    # --- outputs -------------------------------------------------------------
+    out: dict[str, pd.Series] = {}
+    if out_actual_col:
+        out[out_actual_col] = pd.Series(planned_actual, index=staff.index, name=out_actual_col)
+
+    if out_fte_col:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            planned_fte = np.where(fte > 0, planned_actual / fte, np.nan)
+        out[out_fte_col] = pd.Series(planned_fte, index=staff.index, name=out_fte_col)
+
+    return out

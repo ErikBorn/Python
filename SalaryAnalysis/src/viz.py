@@ -366,6 +366,12 @@ def plot_scatter_models_interactive(
     ymins, ymaxs = [], []
     jitter = np.linspace(-0.15, 0.15, num=max(3, len(cols_dict)))
 
+    # small random jitter controls
+    x_jitter_years = 0.12          # ±0.12 years
+    y_jitter_pct   = 0.003         # ±0.3% of salary
+    y_jitter_abs   = 150.0         # or at least ±$150
+    rng = np.random.default_rng(12345)  # fixed seed for repeatability
+
     # by default only these traces visible (others start hidden in legend)
     _default_visible = {"Real", "CONS_Cap_Real"}
 
@@ -377,11 +383,11 @@ def plot_scatter_models_interactive(
         if not np.any(m):
             continue
 
+        # --- build hover text from true (unjittered) values ---
         hdf = staff.loc[m, hover_cols].copy() if hover_cols else pd.DataFrame(index=staff.index[m])
         hdf["Years"] = x_all[m]
         hdf["Salary"] = y[m]
         cd = hdf.to_numpy()
-
         yrs_idx = len(hover_cols)
         sal_idx = len(hover_cols) + 1
 
@@ -396,9 +402,21 @@ def plot_scatter_models_interactive(
                 lines.append(f"{c}: {row[k]}")
             text.append("<br>".join(lines))
 
+        # --- random jitter (applied to plotted positions only) ---
+        n = int(m.sum())
+        # center-of-trace horizontal offset you already had
+        base_x = x_all[m] + (jitter[i] if i < len(jitter) else 0.0)
+        # add small random ± jitter
+        x_rand = (rng.random(n) * 2.0 - 1.0) * x_jitter_years
+        y_span = np.maximum(y[m] * y_jitter_pct, y_jitter_abs)  # scale jitter by salary
+        y_rand = (rng.random(n) * 2.0 - 1.0) * y_span
+
+        x_plot = base_x + x_rand
+        y_plot = y[m] + y_rand
+
         fig.add_trace(go.Scatter(
-            x=x_all[m] + (jitter[i] if i < len(jitter) else 0.0),
-            y=y[m],
+            x=x_plot,
+            y=y_plot,
             mode="markers",
             name=label,
             marker=dict(size=marker_size, color=pal.get(label)),
@@ -630,14 +648,14 @@ def plot_scatter_models_interactive(
         fig.add_trace(go.Table(
             header=dict(
                 values=["Band"] + list(tbl.columns),
-                align="left",
+                align="center",
                 fill_color="rgba(242,242,242,1)",
                 font=dict(size=12, color="#333"),
                 height=24,
             ),
             cells=dict(
                 values=value_cols,
-                align=["left"] + ["right"] * len(tbl.columns),
+                align=["right"] + ["center"] * len(tbl.columns),
                 height=22,
             ),
             domain=dict(x=[0.66, 0.98], y=[0.02, 0.30]),  # bottom-right
