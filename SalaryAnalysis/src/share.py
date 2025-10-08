@@ -1,10 +1,166 @@
-# --- Calculator HTML writer (standalone, no server) ---------------------------
 from __future__ import annotations
-from typing import Optional, Dict
+from typing import Iterable, Sequence, Optional, Mapping
+import os
 import json
 import numpy as np
 import pandas as pd
 from .cohort import build_band_bins_closed, interpolate_salary_strict
+
+def _band_from_years_label(
+    years: float,
+    *,
+    band_starts: Sequence[int] = (0, 6, 11, 16, 21, 26, 31, 36, 41),
+    custom_labels: Optional[Sequence[str]] = None,
+) -> str | float:
+    """Return text band like '0-5', '6-10', …, '41+' for a numeric years value."""
+    if years is None or not np.isfinite(years):  # NaN -> keep blank in export
+        return np.nan
+
+    y = float(years)
+    if custom_labels is None:
+        ends = list(band_starts[1:]) + [None]
+        labels = [f"{s}-{e-1}" if e is not None else f"{s}+"
+                  for s, e in zip(band_starts, ends)]
+    else:
+        labels = list(custom_labels)
+        if len(labels) != len(band_starts):
+            raise ValueError("custom_labels must match band_starts length.")
+
+    for i, s in enumerate(band_starts):
+        if i == len(band_starts) - 1:
+            if y >= s: return labels[i]
+        else:
+            e = band_starts[i + 1]
+            if s <= y < e: return labels[i]
+    return np.nan
+
+
+def export_with_band_and_headers(
+    staff: pd.DataFrame,
+    *,
+    years_source_col: str = "Years of Exp",   # where "years" lives in staff
+    years_output_name: str = "Years",         # column name the sheet expects
+    headers: Sequence[str],                   # exact header list (order preserved)
+    path_csv: str,
+    # band options
+    band_col_name: str = "Band",
+    band_starts: Sequence[int] = (0, 6, 11, 16, 21, 26, 31, 36, 41),
+    custom_band_labels: Optional[Sequence[str]] = None,
+    # optional simple renaming for mismatches (e.g., staff col -> header name)
+    rename_map: Optional[Mapping[str, str]] = None,
+    # optional sort after building columns
+    sort_by: Optional[Sequence[str]] = None,
+) -> pd.DataFrame:
+    """
+    Create a CSV exactly matching `headers`, computing a text Band and a 'Years' column.
+
+    - Reads years from `years_source_col` in `staff` and writes it to `years_output_name`.
+    - Computes `band_col_name` from years using the standard buckets.
+    - For any header not present after renaming/computation, inserts a blank column.
+    - Returns the final DataFrame and writes it to `path_csv`.
+    """
+    df = staff.copy()
+
+    # ---- Normalize / rename incoming columns ----
+    if rename_map:
+        df = df.rename(columns=dict(rename_map))
+
+    # ---- Years: source -> output name ----
+    if years_source_col not in df.columns:
+        raise ValueError(f"Missing years_source_col {years_source_col!r} in staff.")
+    df[years_output_name] = pd.to_numeric(df[years_source_col], errors="coerce")
+
+    # ---- Band: compute text bucket from Years ----
+    df[band_col_name] = df[years_output_name].apply(
+        lambda v: _band_from_years_label(v, band_starts=band_starts, custom_labels=custom_band_labels)
+    )
+
+    # ---- Build output frame in the exact header order ----
+    out_cols = []
+    for h in headers:
+        if h in df.columns:
+            out_cols.append(h)
+        else:
+            # create a blank column for any header we don't have in staff
+            df[h] = np.nan
+            out_cols.append(h)
+
+    out = df.loc[:, out_cols].copy()
+
+    # Optional sort (e.g., by Band then Years)
+    if sort_by:
+        out = out.sort_values(list(sort_by), kind="mergesort")
+
+    os.makedirs(os.path.dirname(path_csv), exist_ok=True)
+    out.to_csv(path_csv, index=False)
+    return out
+
+
+def export_for_format_sheet(
+    staff: pd.DataFrame,
+    *,
+    years_col: str = "Years of Exp",
+    include_cols: Iterable[str],
+    path_csv: str,
+    add_band: bool = True,
+    band_col_name: str = "Band",
+    band_starts: Sequence[int] = (0, 6, 11, 16, 21, 26, 31, 36, 41),
+    custom_band_labels: Optional[Sequence[str]] = None,
+    put_band_after: str | None = None,     # insert Band after this column if present
+    sort_by: Optional[Sequence[str]] = None,
+) -> pd.DataFrame:
+    """
+    Build a CSV that mirrors your formatting sheet.
+
+    - `include_cols` is the exact column order you want in the output (excluding Band).
+    - If `add_band=True`, a text 'Band' column is calculated from `years_col` using the
+      standard buckets (0-5, 6-10, ..., 41+), then inserted either:
+        - right after `put_band_after` (if that column exists), or
+        - at the end (fallback).
+    - Returns the final DataFrame and writes it to `path_csv`.
+
+    NOTE: values are written raw (no currency symbols) to preserve target-sheet formatting.
+    """
+    # Defensive copy and type cleaning for years
+    df = staff.copy()
+    if years_col not in df.columns:
+        raise ValueError(f"'{years_col}' not found in staff columns.")
+
+    df[years_col] = pd.to_numeric(df[years_col], errors="coerce")
+
+    # Calculate Band if requested
+    if add_band:
+        df[band_col_name] = df[years_col].apply(
+            lambda v: _band_from_years_label(v, band_starts=band_starts, custom_labels=custom_band_labels)
+        )
+
+    # Build the column order
+    final_cols = list(include_cols)
+    if add_band:
+        if put_band_after and put_band_after in final_cols:
+            # insert after the specified column
+            idx = final_cols.index(put_band_after) + 1
+            final_cols.insert(idx, band_col_name)
+        else:
+            final_cols.append(band_col_name)
+
+    # Keep only the columns that actually exist; warn if any are missing
+    missing = [c for c in final_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing columns in staff for export: {missing}")
+
+    out = df.loc[:, final_cols].copy()
+
+    # Optional sort (commonly on Band then Years/Employee)
+    if sort_by:
+        # robust numeric sort on years if included
+        out = out.sort_values(list(sort_by), kind="mergesort")
+
+    # Ensure dir exists and write
+    os.makedirs(os.path.dirname(path_csv), exist_ok=True)
+    out.to_csv(path_csv, index=False)
+
+    return out
 
 def write_cohort_aligned_calculator_html(
     long: pd.DataFrame,

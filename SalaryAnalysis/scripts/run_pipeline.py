@@ -22,7 +22,7 @@ from src.viz import (
     plot_scatter_models_interactive,
     cons_cap_overview_html,
 )
-from src.share import write_cohort_aligned_calculator_html
+from src.share import export_with_band_and_headers, write_cohort_aligned_calculator_html, export_for_format_sheet
 
 
 def main(cfg):
@@ -318,30 +318,61 @@ def main(cfg):
         example           = dict(years=18.0, seniority=3.0, degree="MA", prep=1, skill=0, current=70_000),
     )
 
-    # --- Minimal sharing CSV --------------------------------------------------
     CURRENT_COL = "25-26 Salary"
-    KEEP_CALCS  = [
-        "CONS Salary",
-        "CONS_CAP Salary",
-        "CONS_CAP Plan Salary",
-        "All +2% Plan Salary",
-        "Hire Date", "Eth", "Gender", "Years of Exp", "Seniority",
-        "Education Level", "Skill Rating", "Leadership Rating", "Prep Rating",
-        "Level", "Category",
-    ]
-
-    cols_all = list(staff.columns)
-    base_cols = cols_all[: cols_all.index(CURRENT_COL) + 1] if CURRENT_COL in cols_all else cols_all
-
     staff["CCP Increase"] = (
-        pd.to_numeric(staff.get("CONS_CAP Plan Salary"), errors="coerce") -
-        pd.to_numeric(staff.get(CURRENT_COL),            errors="coerce")
+    pd.to_numeric(staff.get("CONS_CAP Plan Salary"), errors="coerce") -
+    pd.to_numeric(staff.get(CURRENT_COL),            errors="coerce")
     )
     denom = pd.to_numeric(staff.get(CURRENT_COL), errors="coerce")
     staff["CCP Increase %"] = np.where(denom > 0, staff["CCP Increase"] / denom, np.nan)
 
-    export_cols = base_cols + [c for c in KEEP_CALCS if c in staff.columns] + ["CCP Increase", "CCP Increase %"]
-    staff.loc[:, export_cols].to_csv(f"{out}/tables/staff_with_models.csv", index=False)
+    staff["FTE"] = _numify_fte(staff["Time Value"]) #Make FTE fraction column
+    # Exact header list you sent:
+    sheet_headers = [
+        "Employee","ID","25-26 Salary","CONS_CAP Salary","All +2% Plan Salary",
+        "CONS_CAP Plan Salary","Manual Salary","FTE","Years","Band","Education Level","Band Color",
+        "Seniority","Skill Rating","Prep Rating","Leadership Rating","Hire Date",
+        "Eth","Gender","Level","Category","CCP Increase","CCP Increase %"
+    ]
+
+    # If any staff column names differ from your headers, map them here.
+    # In your case, we need to surface "Years" from "Years of Exp".
+    rename_map = {
+        # nothing else needed right now; keep for future tweaks
+    }
+
+    format_path = f"{out}/tables/format_sheet_export.csv"
+
+    export_with_band_and_headers(
+        staff,
+        years_source_col="Years of Exp",   # where years live in staff
+        years_output_name="Years",         # the header expects "Years"
+        headers=sheet_headers,
+        path_csv=format_path,
+        band_col_name="Band",
+        band_starts=(0, 6, 11, 16, 21, 26, 31, 36, 41),  # -> 0-5, 6-10, …, 41+
+        custom_band_labels=None,           # or supply custom strings if you ever change names
+        rename_map=rename_map,
+        sort_by=["Band", "Years", "Employee"],  # optional, tweak to your liking
+    )
+
+    #     # --- Minimal sharing CSV --------------------------------------------------
+    # KEEP_CALCS  = [
+    #     "CONS Salary",
+    #     "CONS_CAP Salary",
+    #     "CONS_CAP Plan Salary",
+    #     "All +2% Plan Salary",
+    #     "Hire Date", "Eth", "Gender", "Years of Exp", "Seniority",
+    #     "Education Level", "Skill Rating", "Leadership Rating", "Prep Rating",
+    #     "Level", "Category",
+    # ]
+
+    # cols_all = list(staff.columns)
+    # base_cols = cols_all[: cols_all.index(CURRENT_COL) + 1] if CURRENT_COL in cols_all else cols_all
+
+
+    # export_cols = base_cols + [c for c in KEEP_CALCS if c in staff.columns] + ["CCP Increase", "CCP Increase %"]
+    # staff.loc[:, export_cols].to_csv(f"{out}/tables/staff_with_models.csv", index=False)
 
     # --- Calculator HTML ------------------------------------------------------
     calc_path = f"{out}/figures/cons_cap_calculator.html"

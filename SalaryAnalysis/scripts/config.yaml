@@ -5,7 +5,7 @@ paths:
   out_dir:    SalaryAnalysis/outputs
 
 cohort:
-  target_percentile: 50
+  target_percentile: 60
   target_inflation: 0.02
 
 nonlinear:
@@ -38,11 +38,11 @@ experience_policy:
   extra_years_per_skill: 5
 
 consultant:
-  target_percentile: 50
+  target_percentile: 60
   inflation: 0.02
   deg_ma_pct: 0.04
   deg_phd_pct: 0.08
-  pre_degree_down_pct: 0.05
+  pre_degree_down_pct: 0.04
   # bonuses
   prep_col: "Prep Rating"
   prep_bonus: 2500
