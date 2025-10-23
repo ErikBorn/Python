@@ -1,11 +1,11 @@
 paths:
-  cohort_csv: SalaryAnalysis/data/cohort_state.csv
+  cohort_csv: SalaryAnalysis/data/cohort_local.csv
   local_cohort_csv: SalaryAnalysis/data/cohort_local.csv
   staff_csv:  SalaryAnalysis/data/staff.csv
   out_dir:    SalaryAnalysis/outputs
 
 cohort:
-  target_percentile: 60
+  target_percentile: 40
   target_inflation: 0.02
 
 nonlinear:
@@ -38,18 +38,18 @@ experience_policy:
   extra_years_per_skill: 5
 
 consultant:
-  target_percentile: 60
+  target_percentile: 40
   inflation: 0.02
   deg_ma_pct: 0.04
   deg_phd_pct: 0.08
   pre_degree_down_pct: 0.04
   # bonuses
   prep_col: "Prep Rating"
-  prep_bonus: 2500
+  prep_bonus: 0
   skill_col: "Skill Rating"
-  skill_bonus: 2000
+  skill_bonus: 0
   lead_col: "Leadership Rating"
-  leadership_bonus: 3000
+  leadership_bonus: 0
 
 consultant_capped:
   enabled: true

@@ -57,9 +57,6 @@ def main(cfg):
     bump = cfg["planning"]["bump"]   # e.g., 0.02
     tol  = cfg["planning"]["tol"]    # e.g., 0.02
 
-    prep_series_name = cfg.get("prep", {}).get("flag_col", "Prep")
-    prep_bonus       = cfg.get("prep", {}).get("bonus", 2500.0)
-
     cns = cfg["consultant"]
 
     # Base consultant
@@ -74,8 +71,8 @@ def main(cfg):
         auto_downshift        = cns.get("auto_downshift", False),
         years_col             = "Years of Exp",
         edu_col               = "Education Level",
-        prep_col              = prep_series_name,
-        prep_bonus            = prep_bonus,
+        prep_col              = cns.get("prep_col", "Prep Rating"),
+        prep_bonus            = cns.get("prep_bonus", 0.),
         # NEW: flat stipends by flags
         skill_col             = cns.get("skill_col", "Skill Rating"),
         skill_bonus           = cns.get("skill_bonus", 0.0),
@@ -97,8 +94,8 @@ def main(cfg):
         max_salary            = cap_cfg.get("max_salary", 100_000),
         years_col             = "Years of Exp",
         edu_col               = "Education Level",
-        prep_col              = prep_series_name,
-        prep_bonus            = prep_bonus,
+        prep_col              = cns.get("prep_col", "Prep Rating"),
+        prep_bonus            = cns.get("prep_bonus", 0.),
         skill_col             = cns.get("skill_col", "Skill Rating"),
         skill_bonus           = cns.get("skill_bonus", 0.0),
         leadership_col        = cns.get("lead_col", "Leadership Rating"),
@@ -265,7 +262,7 @@ def main(cfg):
             "downshift_pct":     cns.get("pre_degree_down_pct", 0.03),
             "deg_ma_pct":        cns.get("deg_ma_pct", 0.02),
             "deg_phd_pct":       cns.get("deg_phd_pct", 0.04),
-            "prep_bonus":        prep_bonus,
+            "prep_bonus":        cns.get("prep_bonus", 0.0),
             "skill_bonus":       cns.get("skill_bonus", 0.0),
             "leadership_bonus":  cns.get("leadership_bonus", 0.0),
         },
@@ -307,7 +304,7 @@ def main(cfg):
         inflation         = cap_cfg.get("inflation",         cns["inflation"]),
         deg_ma_pct        = cap_cfg.get("deg_ma_pct",        cns.get("deg_ma_pct", 0.02)),
         deg_phd_pct       = cap_cfg.get("deg_phd_pct",       cns.get("deg_phd_pct", 0.04)),
-        prep_bonus        = cfg["planning"].get("prep_bonus", 2500.0),
+        prep_bonus        = cns.get("prep_bonus", 0.0),
         max_salary        = cap_cfg.get("max_salary", 100_000),
         cola_floor        = cfg["planning"]["bump"],
         outside_cap_years = cfg.get("years_policy", {}).get("outside_cap_years", 10),

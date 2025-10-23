@@ -58,18 +58,18 @@
         </div>
         <div>
           <label>AP/Prep stipend</label>
-          <select id="prep"><option value="0" selected>No</option><option value="1">Yes (+$2,500)</option></select>
+          <select id="prep"><option value="0" selected>No</option><option value="1">Yes (+$0)</option></select>
         </div>
       </div>
 
       <div class="row">
         <div>
           <label>Skill stipend</label>
-          <select id="skillStip"><option value="0" selected>No</option><option value="1">Yes (+$2,000)</option></select>
+          <select id="skillStip"><option value="0" selected>No</option><option value="1">Yes</option></select>
         </div>
         <div>
           <label>Leadership stipend</label>
-          <select id="leadStip"><option value="0" selected>No</option><option value="1">Yes (+$3,000)</option></select>
+          <select id="leadStip"><option value="0" selected>No</option><option value="1">Yes</option></select>
         </div>
       </div>
 
@@ -98,14 +98,14 @@
         </tbody>
       </table>
       <div class="note" style="margin-top:8px">
-        Anchors use band midpoints at P60 with +2% inflation.
+        Anchors use band midpoints at P40 with +2% inflation.
       </div>
     </div>
   </div>
 </div>
 
 <script>
-const CFG = {"xp": [2.5, 8.0, 13.0, 18.0, 23.0, 28.0, 33.0, 38.5, 43.5], "fp": [58940.292, 66039.69600000001, 72322.08, 77834.16, 82395.19200000001, 89104.548, 95413.656, 101544.876, 111017.61600000001], "preDown": 0.04, "maPct": 0.04, "phdPct": 0.08, "prepBonus": 2500.0, "skillBonus": 2000.0, "leadBonus": 3000.0, "maxSalary": 90000.0, "colaFloor": 0.02, "pTitle": 60, "inflPct": 2};
+const CFG = {"xp": [2.5, 8.0, 13.0, 18.0, 23.0, 28.0], "fp": [56569.200000000004, 69094.8, 77940.24, 85291.584, 91575.6, 89339.76], "preDown": 0.04, "maPct": 0.04, "phdPct": 0.08, "prepBonus": 0.0, "skillBonus": 0.0, "leadBonus": 0.0, "maxSalary": 90000.0, "colaFloor": 0.02, "pTitle": 40, "inflPct": 2};
 
 function money(x) {
   return (isFinite(x)) ? "$" + Math.round(x).toLocaleString() : "";
