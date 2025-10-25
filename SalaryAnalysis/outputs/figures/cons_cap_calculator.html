@@ -98,14 +98,14 @@
         </tbody>
       </table>
       <div class="note" style="margin-top:8px">
-        Anchors use band midpoints at P40 with +2% inflation.
+        Anchors use band midpoints at P25 with +0% inflation.
       </div>
     </div>
   </div>
 </div>
 
 <script>
-const CFG = {"xp": [2.5, 8.0, 13.0, 18.0, 23.0, 28.0], "fp": [56569.200000000004, 69094.8, 77940.24, 85291.584, 91575.6, 89339.76], "preDown": 0.04, "maPct": 0.04, "phdPct": 0.08, "prepBonus": 0.0, "skillBonus": 0.0, "leadBonus": 0.0, "maxSalary": 90000.0, "colaFloor": 0.02, "pTitle": 40, "inflPct": 2};
+const CFG = {"xp": [2.5, 8.0, 13.0, 18.0, 23.0, 28.0, 33.0, 38.0, 43.5], "fp": [62407.0, 73591.0, 79349.0, 85002.0, 92409.0, 95410.0, 99037.0, 102815.0, 107351.0], "preDown": 0.04, "maPct": 0.04, "phdPct": 0.08, "prepBonus": 0.0, "skillBonus": 0.0, "leadBonus": 0.0, "maxSalary": 105000.0, "colaFloor": 0.03, "pTitle": 25, "inflPct": 0};
 
 function money(x) {
   return (isFinite(x)) ? "$" + Math.round(x).toLocaleString() : "";

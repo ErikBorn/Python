@@ -31,6 +31,17 @@ def apply_raise_rule(real: float, model: float, bump: float = 0.02, tol: float =
         return model
     return real * (1.0 + float(bump))
 
+def apply_raise_rule_lift_then_bump(real: float, model: float, bump: float = 0.02, tol: float = 0.0) -> float:
+    """
+    New rule: first lift to the model (if real < model*(1-tol)), then apply the bump to everyone.
+    Equivalent to max(real, model_adjusted) * (1+bump), with a small tolerance if desired.
+    """
+    if pd.isna(real) or pd.isna(model):
+        return np.nan
+    real  = float(real)
+    model = float(model)
+    base = model if real < model * (1.0 - float(tol)) else real
+    return base * (1.0 + float(bump))
 
 # -----------------------------
 # Column-level planner (pure)
@@ -338,70 +349,56 @@ def plan_salary_fte(
     out_fte_col: str | None = None,     # planned FTE $ (for plots/tables)
     bump: float = 0.02,
     tol: float = 0.02,
-) -> dict[str, pd.Series]:
-    # --- required columns present? ---
-    for c in (real_actual_col, model_fte_col, fte_col):
-        if c not in staff.columns:
-            raise ValueError(f"Missing column: {c!r}")
+    lift_then_bump: bool = True,
+    ) -> dict[str, pd.Series]:
+        # --- required columns present? ---
+        for c in (real_actual_col, model_fte_col, fte_col):
+            if c not in staff.columns:
+                raise ValueError(f"Missing column: {c!r}")
 
-    # --- robust cleaners -----------------------------------------------------
-    def _numify_money(s: pd.Series) -> pd.Series:
-        """
-        Convert a money-like series to float:
-        - strips $ and commas
-        - trims whitespace
-        - coerces to float
-        """
-        if s.dtype == object:
-            s = s.astype(str).str.replace(r"[,\$]", "", regex=True).str.strip()
-        return pd.to_numeric(s, errors="coerce")
+        # --- robust cleaners -----------------------------------------------------
+        def _numify_money(s: pd.Series) -> pd.Series:
+            if s.dtype == object:
+                s = s.astype(str).str.replace(r"[,\$]", "", regex=True).str.strip()
+            return pd.to_numeric(s, errors="coerce")
 
-    def _numify_fte(s: pd.Series) -> pd.Series:
-        """
-        Convert FTE to float in [0,1]:
-        - handles '80%' -> 0.8
-        - handles '0.8', ' 1 ', etc.
-        - fills NaN with 1.0 (assume full-time if missing)
-        """
-        if s.dtype == object:
-            st = s.astype(str).str.strip()
-            pct_mask = st.str.endswith("%", na=False)
-            # percent strings -> divide by 100
-            s_pct = pd.to_numeric(st.str.rstrip("%"), errors="coerce") / 100.0
-            s_num = pd.to_numeric(st, errors="coerce")
-            s = np.where(pct_mask, s_pct, s_num)
-            s = pd.Series(s, index=s.index)
-        else:
-            s = pd.to_numeric(s, errors="coerce")
+        def _numify_fte(s: pd.Series) -> pd.Series:
+            if s.dtype == object:
+                st = s.astype(str).str.strip()
+                pct_mask = st.str.endswith("%", na=False)
+                s_pct = pd.to_numeric(st.str.rstrip("%"), errors="coerce") / 100.0
+                s_num = pd.to_numeric(st, errors="coerce")
+                s = np.where(pct_mask, s_pct, s_num)
+                s = pd.Series(s, index=st.index)
+            else:
+                s = pd.to_numeric(s, errors="coerce")
+            big = s > 1.5
+            s.loc[big] = s.loc[big] / 100.0
+            return s.fillna(1.0)
 
-        # sometimes people store 80 instead of 0.8; if values > 1.5, treat like percent
-        big = s > 1.5
-        s.loc[big] = s.loc[big] / 100.0
-        return s.fillna(1.0)
+        # --- sanitize inputs -----------------------------------------------------
+        real_actual = _numify_money(staff[real_actual_col]).to_numpy(dtype=float)
+        model_fte   = _numify_money(staff[model_fte_col]).to_numpy(dtype=float)
+        fte         = _numify_fte(staff[fte_col]).to_numpy(dtype=float)
 
-    # --- sanitize inputs -----------------------------------------------------
-    real_actual = _numify_money(staff[real_actual_col]).to_numpy(dtype=float)
-    model_fte   = _numify_money(staff[model_fte_col]).to_numpy(dtype=float)
-    fte         = _numify_fte(staff[fte_col]).to_numpy(dtype=float)
+        with np.errstate(invalid="ignore"):
+            model_actual = np.where(np.isfinite(model_fte) & np.isfinite(fte), model_fte * fte, np.nan)
 
-    # Guard against bad rows: if either model or fte is non-finite, model_actual = NaN
-    with np.errstate(invalid="ignore"):
-        model_actual = np.where(np.isfinite(model_fte) & np.isfinite(fte), model_fte * fte, np.nan)
+        # --- choose rule ---------------------------------------------------------
+        rule_fn = (apply_raise_rule_lift_then_bump if lift_then_bump else apply_raise_rule)
 
-    # --- apply rule on ACTUAL dollars ---------------------------------------
-    planned_actual = np.array(
-        [apply_raise_rule(r, m, bump=bump, tol=tol) for r, m in zip(real_actual, model_actual)],
-        dtype=float
-    )
+        # --- apply rule on ACTUAL dollars ---------------------------------------
+        planned_actual = np.array([rule_fn(r, m, bump=bump, tol=tol) for r, m in zip(real_actual, model_actual)],
+                                dtype=float)
 
-    # --- outputs -------------------------------------------------------------
-    out: dict[str, pd.Series] = {}
-    if out_actual_col:
-        out[out_actual_col] = pd.Series(planned_actual, index=staff.index, name=out_actual_col)
+        # --- outputs -------------------------------------------------------------
+        out: dict[str, pd.Series] = {}
+        if out_actual_col:
+            out[out_actual_col] = pd.Series(planned_actual, index=staff.index, name=out_actual_col)
 
-    if out_fte_col:
-        with np.errstate(divide="ignore", invalid="ignore"):
-            planned_fte = np.where(fte > 0, planned_actual / fte, np.nan)
-        out[out_fte_col] = pd.Series(planned_fte, index=staff.index, name=out_fte_col)
+        if out_fte_col:
+            with np.errstate(divide="ignore", invalid="ignore"):
+                planned_fte = np.where(fte > 0, planned_actual / fte, np.nan)
+            out[out_fte_col] = pd.Series(planned_fte, index=staff.index, name=out_fte_col)
 
-    return out
+        return out

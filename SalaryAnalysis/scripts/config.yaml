@@ -5,9 +5,8 @@ paths:
   out_dir:    SalaryAnalysis/outputs
 
 cohort:
-  target_percentile: 40
-  target_inflation: 0.02
-
+  target_percentile: 25
+  target_inflation: 0.00
 nonlinear:
   base_salary: 55000
   exp_base_per_year: 1800
@@ -38,8 +37,8 @@ experience_policy:
   extra_years_per_skill: 5
 
 consultant:
-  target_percentile: 40
-  inflation: 0.02
+  target_percentile: 25
+  inflation: 0.00
   deg_ma_pct: 0.04
   deg_phd_pct: 0.08
   pre_degree_down_pct: 0.04
@@ -54,12 +53,12 @@ consultant:
 consultant_capped:
   enabled: true
   # inherit anything you omit from 'consultant'
-  max_salary: 90000
+  max_salary: 105000
 
 planning:
-  bump: 0.02
-  tol: 0.02
-  keep_above_uplift: 0.02
+  bump: 0.03
+  tol: 0.03
+  keep_above_uplift: 0.03
   faculty_size: 87.5
 
 plots:

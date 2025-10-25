@@ -124,6 +124,7 @@ def main(cfg):
         out_fte_col="CONS Plan Salary",
         bump=cfg["planning"]["bump"],
         tol=cfg["planning"]["tol"],
+        lift_then_bump=True,
     )
     staff["CONS Plan Salary (actual)"] = pd.to_numeric(res["CONS Plan Salary (actual)"], errors="coerce")
     staff["CONS Plan Salary"]          = pd.to_numeric(res["CONS Plan Salary"],          errors="coerce")
@@ -138,6 +139,7 @@ def main(cfg):
         out_fte_col="CONS_CAP Plan Salary",
         bump=cfg["planning"]["bump"],
         tol=cfg["planning"]["tol"],
+        
     )
     staff["CONS_CAP Plan Salary (actual)"] = pd.to_numeric(res["CONS_CAP Plan Salary (actual)"], errors="coerce")
     staff["CONS_CAP Plan Salary"]          = pd.to_numeric(res["CONS_CAP Plan Salary"],          errors="coerce")
