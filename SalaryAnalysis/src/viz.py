@@ -333,7 +333,9 @@ def plot_scatter_models_interactive(
     target_percentile: Optional[float] = None,
     plus_minus_pct: float = 0.10,
     inflation: float = 0.0,
-    band_color: str = "rgba(44,160,44,0.85)",
+    band_color: str = "rgba(200,40,44,0.85)",
+    band_provider: Optional[callable] = None,
+    band_name: Optional[str] = None,
     summary_info: Optional[dict] = None,
     per_band_table: Optional[pd.DataFrame] = None,  # <— the DataFrame you already compute
 ):
@@ -373,7 +375,7 @@ def plot_scatter_models_interactive(
     rng = np.random.default_rng(12345)  # fixed seed for repeatability
 
     # by default only these traces visible (others start hidden in legend)
-    _default_visible = {"Real", "CONS_Cap_Real"}
+    _default_visible = {"Real", "MT_CAP_Real"}
 
     for i, (label, col) in enumerate(cols_dict.items()):
         if col not in staff.columns:
@@ -429,21 +431,34 @@ def plot_scatter_models_interactive(
     # --- determine x-range (use staff; add bands later) ----------------------
     x_right = max(40, int(np.nanmax(x_all))) if np.isfinite(x_all).any() else 40
 
-    # --- optional flat band overlay ------------------------------------------
+    # --- optional band overlay (cohort OR custom provider) --------------------
     band_ymins, band_ymaxs = [], []
-    if long is not None and target_percentile is not None:
-        bins, _ = build_band_bins_closed(long)
+    bins, _ = build_band_bins_closed(long) if long is not None else ([], [])
+
+    # decide how we get the base y for each band
+    _use_custom = callable(band_provider)
+    _use_cohort = (not _use_custom) and (long is not None) and (target_percentile is not None)
+
+    if _use_custom or _use_cohort:
         finite_bins = [(s, e, lab) for (s, e, lab) in bins if np.isfinite(e)]
         if finite_bins:
             x_right = max(x_right, int(max(e for (_, e, _) in finite_bins)))
 
         first_drawn = True
+        label_for_legend = band_name or (f"Bands @P{int(round(target_percentile))}" if _use_cohort else "Bands")
+
         for start, end, label in finite_bins:
             x0, x1 = float(start), float(end)
-            y = interpolate_salary_strict(long, label, float(target_percentile))
+            if _use_custom:
+                y = float(band_provider(start, end, label))
+            else:
+                y = interpolate_salary_strict(long, label, float(target_percentile))
+                if not pd.isna(y):
+                    y = float(y) * (1.0 + float(inflation))
+
             if pd.isna(y):
                 continue
-            y = float(y) * (1.0 + float(inflation))
+
             y_lo = y * (1.0 - plus_minus_pct)
             y_hi = y * (1.0 + plus_minus_pct)
 
@@ -451,11 +466,11 @@ def plot_scatter_models_interactive(
                 x=[x0, x1], y=[y, y],
                 mode="lines",
                 line=dict(width=3, color=band_color),
-                name=f"Bands @P{int(round(target_percentile))}",
+                name=label_for_legend,
                 legendgroup="bands",
                 showlegend=first_drawn,
                 hoverinfo="skip",
-                visible=True,  # bands visible by default
+                visible=True,
             ))
             for yd in (y_lo, y_hi):
                 fig.add_trace(go.Scatter(
@@ -494,6 +509,8 @@ def plot_scatter_models_interactive(
             "CONS_CAP": "Cap",
             "CONS_Cap_Real": "CCR",
             "COLA 2%": "COLA",
+            "MT_CAP": "MT Cap",
+            "MT_CAP_Real": "MT CCR",
         }
         # Try to preserve only columns that exist
         show_cols = [c for c in ["Real","CONS","CONS_CAP","CONS_Cap_Real","COLA 2%"] if c in per_band_table.columns]

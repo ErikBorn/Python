@@ -14,6 +14,9 @@ import numpy as np
 from src.io import load_staff, load_cohort
 from src.policies import apply_outside_exp_cap
 from src.models.consultant import consultant_predict, consultant_predict_capped
+from src.models.median_target import median_target_predict, median_target_predict_capped
+from src.cohort import build_band_bins_closed
+from src.models.median_target import build_mt_band_targets
 from src.planning import plan_salary_column, plan_costs, plan_costs_table, plan_salary_fte
 from src.metrics import achieved_percentiles, band_medians_table, per_band_median_percentiles
 from src.viz import (
@@ -23,6 +26,7 @@ from src.viz import (
     cons_cap_overview_html,
 )
 from src.share import export_with_band_and_headers, write_cohort_aligned_calculator_html, export_for_format_sheet
+
 
 
 def main(cfg):
@@ -54,8 +58,8 @@ def main(cfg):
     )
 
     # --- Consultant models ----------------------------------------------------
-    bump = cfg["planning"]["bump"]   # e.g., 0.02
-    tol  = cfg["planning"]["tol"]    # e.g., 0.02
+    # bump = cfg["planning"]["bump"]   # e.g., 0.02
+    # tol  = cfg["planning"]["tol"]    # e.g., 0.02
 
     cns = cfg["consultant"]
 
@@ -102,6 +106,47 @@ def main(cfg):
         leadership_bonus      = cns.get("leadership_bonus", 0.0),
     )
 
+    # New Median target models
+    mt = cfg["median_target"]
+    staff["MT Salary"] = median_target_predict(
+        staff, long,
+        band_targets=mt["band_targets"],
+        inflation=mt.get("inflation", 0.0),
+        years_col="Years of Exp",
+        edu_col="Education Level",
+        prep_col=mt.get("prep_col","Prep"),
+        prep_bonus=mt.get("prep_bonus", 0.0),
+        deg_ma_pct=mt.get("deg_ma_pct", 0.02),
+        deg_phd_pct=mt.get("deg_phd_pct", 0.04),
+        skill_col=mt.get("skill_col"),
+        skill_bonus=mt.get("skill_bonus", 0.0),
+        leadership_col=mt.get("lead_col"),
+        leadership_bonus=mt.get("leadership_bonus", 0.0),
+        pre_degree_down_pct=mt.get("pre_degree_down_pct", 0.03),
+        auto_downshift=mt.get("auto_downshift", False),
+    )
+
+    staff["MT_CAP Salary"] = median_target_predict_capped(
+        staff, long,
+        band_targets=mt["band_targets"],
+        inflation=mt.get("inflation", 0.0),
+        max_salary=mt.get("max_salary", 100_000),
+        years_col="Years of Exp",
+        edu_col="Education Level",
+        prep_col=mt.get("prep_col","Prep"),
+        prep_bonus=mt.get("prep_bonus", 0.0),
+        deg_ma_pct=mt.get("deg_ma_pct", 0.02),
+        deg_phd_pct=mt.get("deg_phd_pct", 0.04),
+        skill_col=mt.get("skill_col"),
+        skill_bonus=mt.get("skill_bonus", 0.0),
+        leadership_col=mt.get("lead_col"),
+        leadership_bonus=mt.get("leadership_bonus", 0.0),
+        pre_degree_down_pct=mt.get("pre_degree_down_pct", 0.03),
+        auto_downshift=mt.get("auto_downshift", False),
+    )
+
+    
+
     # --- COLA 2% (actual + FTE) -------------------------------------------------
     real_actual = _numify_money(staff[REAL_ACTUAL_COL])
     fte         = _numify_fte(staff[FTE_COL])
@@ -114,20 +159,29 @@ def main(cfg):
 
     staff["_REAL_ACTUAL_NUM"] = _numify_money(staff[REAL_ACTUAL_COL])
 
-    # CONS (actual + FTE)
+    # MT (actual + FTE)
+    # assumes you've already created staff["MEDIAN_TARGET Salary"] via median_target_predict(...)
+    from src.planning import plan_salary_fte
+
     res = plan_salary_fte(
         staff,
         real_actual_col=REAL_ACTUAL_COL,
-        model_fte_col="CONS Salary",
+        model_fte_col="MT_CAP Salary",
         fte_col=FTE_COL,
-        out_actual_col="CONS Plan Salary (actual)",
-        out_fte_col="CONS Plan Salary",
+        out_actual_col="MT_CAP Plan Salary (actual)",
+        out_fte_col="MT_CAP Plan Salary",
         bump=cfg["planning"]["bump"],
         tol=cfg["planning"]["tol"],
         lift_then_bump=True,
     )
-    staff["CONS Plan Salary (actual)"] = pd.to_numeric(res["CONS Plan Salary (actual)"], errors="coerce")
-    staff["CONS Plan Salary"]          = pd.to_numeric(res["CONS Plan Salary"],          errors="coerce")
+
+    staff["MT_CAP Plan Salary (actual)"] = pd.to_numeric(res["MT_CAP Plan Salary (actual)"], errors="coerce")
+    staff["MT_CAP Plan Salary"]          = pd.to_numeric(res["MT_CAP Plan Salary"],          errors="coerce")
+
+    mt_targets = build_mt_band_targets(long, cfg["median_target"]["band_targets"], cfg["median_target"]["inflation"])
+    def mt_band_provider(start: float, end: float, label: str) -> float:
+        # fall back to NaN if a band is missing
+        return mt_targets.get(label, np.nan)
 
     # CONS_CAP (actual + FTE)
     res = plan_salary_fte(
@@ -148,12 +202,12 @@ def main(cfg):
         staff,
         real_col=REAL_ACTUAL_COL,
         planned_cols=[
-            "CONS Plan Salary (actual)",
+            "MT_CAP Plan Salary (actual)",
             "CONS_CAP Plan Salary (actual)",
             "All +2% Plan Salary (actual)",
         ],
         labels=[
-            "CONS",
+            "MT_Cap",
             "CONS_CAP",
             "All +2%",
         ],
@@ -165,7 +219,8 @@ def main(cfg):
     # --- Percentiles & band tables (consultant-only) --------------------------
     cols_dict = {
         "Real":     "25-26 Salary",
-        "CONS":     "CONS Salary",
+        "MT_CAP":     "MT_CAP Salary",
+        "MT_CAP_Real": "MT_CAP Plan Salary",   # keep label the same for the overlay
         "CONS_CAP": "CONS_CAP Salary",
         "CONS_Cap_Real": "CONS_CAP Plan Salary",   # keep label the same for the overlay
         "COLA 2%":  "All +2% Plan Salary",
@@ -183,13 +238,14 @@ def main(cfg):
         long, staff,
         salary_cols=[
             "25-26 Salary",
-            "CONS Salary",
+            "MT_CAP Salary",
+            "MT_CAP Plan Salary",
             "CONS_CAP Salary",
             "CONS_CAP Plan Salary",   # was "CONS_Cap_Real"
             "All +2% Plan Salary",
         ],
         years_col="Years of Exp",
-        labels=["Real", "CONS", "CONS_CAP", "CONS_Cap_Real", "COLA 2%"],
+        labels=["Real", "MT_CAP", "MT_CAP_Real", "CONS_CAP", "CONS_CAP_Real", "COLA 2%"],
     ).round(1)
     pct.to_csv(f"{out}/tables/achieved_percentiles.csv")
 
@@ -197,9 +253,10 @@ def main(cfg):
         long, staff,
         salary_cols=[
             "25-26 Salary",
-            "CONS Salary",
-            "CONS_CAP Salary",
-            "CONS_CAP Plan Salary",   # <-- was "CONS_Cap_Real"
+            "MT_CAP Salary",
+            "MT_CAP Plan Salary",
+            # "CONS_CAP Salary",
+            # "CONS_CAP Plan Salary",   # <-- was "CONS_Cap_Real"
             "All +2% Plan Salary",
         ],
     )
@@ -269,7 +326,7 @@ def main(cfg):
             "leadership_bonus":  cns.get("leadership_bonus", 0.0),
         },
         "models": {
-            "CONS":     _model_summary("CONS Plan Salary (actual)",     "CONS Plan Salary"),
+            "MT_CAP": _model_summary("MT_CAP Plan Salary (actual)",     "MT_CAP Plan Salary"),
             "CONS_CAP": _model_summary("CONS_CAP Plan Salary (actual)", "CONS_CAP Plan Salary"),
             "COLA 2%":  _model_summary("All +2% Plan Salary (actual)",  "All +2% Plan Salary"),  # see 4b below
         },
@@ -280,7 +337,8 @@ def main(cfg):
         years_col="Years of Exp",
         cols_dict={
             "Real":          "25-26 Salary",
-            "CONS":          "CONS Salary",
+            "MT_CAP":       "MT_CAP Salary",
+            "MT_CAP_Real":  "MT_CAP Plan Salary",   # legend label unchanged
             "CONS_CAP":      "CONS_CAP Salary",
             "CONS_Cap_Real": "CONS_CAP Plan Salary",   # legend label unchanged
             "COLA 2%":       "All +2% Plan Salary",
@@ -292,9 +350,11 @@ def main(cfg):
         ] if c in staff.columns],
         marker_size=9,
         long=long,
-        target_percentile=cfg["cohort"]["target_percentile"],
+        target_percentile=None,
         inflation=cfg["cohort"]["target_inflation"],
         plus_minus_pct=cfg["plots"]["plus_minus_pct"],
+        band_provider=mt_band_provider,
+        band_name="MT band targets",
         summary_info=summary_info,
         per_band_table=band_pct_med               # <— new
     )
@@ -328,7 +388,7 @@ def main(cfg):
     staff["FTE"] = _numify_fte(staff["Time Value"]) #Make FTE fraction column
     # Exact header list you sent:
     sheet_headers = [
-        "Employee","ID","25-26 Salary","CONS_CAP Salary","All +2% Plan Salary",
+        "Employee","ID","25-26 Salary","All +2% Plan Salary","MT_CAP Salary","MT_CAP Plan Salary","CONS_CAP Salary",
         "CONS_CAP Plan Salary","Manual Salary","FTE","Years","Band","Education Level","Band Color",
         "Seniority","Skill Rating","Prep Rating","Leadership Rating","Hire Date",
         "Eth","Gender","Level","Category","CCP Increase","CCP Increase %"

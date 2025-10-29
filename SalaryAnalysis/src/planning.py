@@ -348,7 +348,7 @@ def plan_salary_fte(
     out_actual_col: str | None = None,  # planned actual $
     out_fte_col: str | None = None,     # planned FTE $ (for plots/tables)
     bump: float = 0.02,
-    tol: float = 0.02,
+    tol: float = 0.00,
     lift_then_bump: bool = True,
     ) -> dict[str, pd.Series]:
         # --- required columns present? ---

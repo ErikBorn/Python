@@ -5,7 +5,7 @@ paths:
   out_dir:    SalaryAnalysis/outputs
 
 cohort:
-  target_percentile: 25
+  target_percentile: 50
   target_inflation: 0.00
 nonlinear:
   base_salary: 55000
@@ -37,7 +37,7 @@ experience_policy:
   extra_years_per_skill: 5
 
 consultant:
-  target_percentile: 25
+  target_percentile: 50
   inflation: 0.00
   deg_ma_pct: 0.04
   deg_phd_pct: 0.08
@@ -57,10 +57,34 @@ consultant_capped:
 
 planning:
   bump: 0.03
-  tol: 0.03
+  tol: 0.00
   keep_above_uplift: 0.03
   faculty_size: 87.5
 
 plots:
-  plus_minus_pct: 0.10
+  plus_minus_pct: 0.08
   include_models: ["Real","NLM","RPB","PW"]
+
+median_target:
+  inflation: 0.00
+  pre_degree_down_pct: 0.04
+  deg_ma_pct: 0.04
+  deg_phd_pct: 0.08
+  prep_col: "Prep"
+  prep_bonus: 0
+  skill_col: "Skill Rating"
+  skill_bonus: 0
+  lead_col: "Leadership Rating"
+  leadership_bonus: 0
+  max_salary: 105000
+  # labels must match your cohort bands in `long`
+  band_targets:
+    "0-5":   55000
+    "6-10":  65000
+    "11-15": 70000
+    "16-20": 75000
+    "21-25": 80000
+    "26-30": 85000
+    "31-35": 87000
+    "36-40": 89000
+    "41+":   90000
